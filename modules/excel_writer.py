@@ -552,39 +552,38 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
 def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
                          qoo10_data: Optional[dict], jpy_rate: float,
                          year_month: str):
-    """총집계 시트 작성"""
+    """총집계 시트 작성 (B열부터 배치, 빈 행 제거)"""
     NUM  = '#,##0'        # 원화 (정수, 천단위)
     NUM2 = '#,##0.00'     # 외화 (소수 2자리)
 
-    # 열 너비 — 숫자가 지수표기(E+08)로 깨지지 않도록 충분히
-    ws.column_dimensions['G'].width = 16
-    ws.column_dimensions['H'].width = 14
-    ws.column_dimensions['I'].width = 16
+    # 열 너비 — 숫자가 지수표기로 깨지지 않도록 충분히
+    ws.column_dimensions['B'].width = 16
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 16
 
-    ws['A1'] = '유엠(UM)(529-12-02268)'
-    _style(ws['A1'], font=FONT_TITLE)
+    ws['B1'] = '유엠(UM)(529-12-02268)'
+    _style(ws['B1'], font=FONT_TITLE)
+    ws['D2'] = year_month  # 예: '2025년 12월'
+    _style(ws['D2'], font=FONT_BOLD)
 
-    ws['B2'] = year_month  # 예: '2025년 12월'
-    _style(ws['B2'], font=FONT_BOLD)
-
-    def _hdr(ref, val):
-        ws[ref] = val
-        _style(ws[ref], font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
+    def _hdr(col, row, val):
+        c = ws.cell(row=row, column=col, value=val)
+        _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
     def _datarow(r, name, fx, krw):
-        ws.cell(row=r, column=7, value=name)
-        ws.cell(row=r, column=8, value=fx)
-        ws.cell(row=r, column=9, value=krw)
-        _style(ws.cell(row=r, column=7), font=FONT_DEFAULT, align=LEFT,  border=THIN_BORDER)
-        _style(ws.cell(row=r, column=8), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
-        _style(ws.cell(row=r, column=9), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        ws.cell(row=r, column=2, value=name)
+        ws.cell(row=r, column=3, value=fx)
+        ws.cell(row=r, column=4, value=krw)
+        _style(ws.cell(row=r, column=2), font=FONT_DEFAULT, align=LEFT,  border=THIN_BORDER)
+        _style(ws.cell(row=r, column=3), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
+        _style(ws.cell(row=r, column=4), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
 
     def _totalrow(r, krw):
-        ws.cell(row=r, column=7, value='총합')
-        ws.cell(row=r, column=9, value=krw)
-        _style(ws.cell(row=r, column=7), font=FONT_BOLD, align=LEFT,  border=THIN_BORDER, fill=GRAY_FILL)
-        _style(ws.cell(row=r, column=8), border=THIN_BORDER, fill=GRAY_FILL)
-        _style(ws.cell(row=r, column=9), font=FONT_BOLD, align=RIGHT, border=THIN_BORDER, fill=GRAY_FILL, num_format=NUM)
+        ws.cell(row=r, column=2, value='총합')
+        ws.cell(row=r, column=4, value=krw)
+        _style(ws.cell(row=r, column=2), font=FONT_BOLD, align=LEFT,  border=THIN_BORDER, fill=GRAY_FILL)
+        _style(ws.cell(row=r, column=3), border=THIN_BORDER, fill=GRAY_FILL)
+        _style(ws.cell(row=r, column=4), font=FONT_BOLD, align=RIGHT, border=THIN_BORDER, fill=GRAY_FILL, num_format=NUM)
 
     COUNTRY_NAMES = {
         'MYR': '말레이시아(MYR)', 'PHP': '필리핀(PHP)',
@@ -592,49 +591,46 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
         'TWD': '대만(TWD)', 'VND': '베트남(VND)',
     }
 
-    # 쇼피
-    ws['G4'] = '쇼피'
-    _style(ws['G4'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr('G13', '국가'); _hdr('H13', '외화'); _hdr('I13', '원화')
-
+    # 쇼피 (제목 B5, 헤더 6행, 데이터 7~12, 총합 13)
+    ws['B5'] = '쇼피'
+    _style(ws['B5'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
+    _hdr(2, 6, '국가'); _hdr(3, 6, '외화'); _hdr(4, 6, '원화')
     shopee_total_krw = 0
-    for r, (cur, name) in enumerate(COUNTRY_NAMES.items(), 14):
+    for r, (cur, name) in enumerate(COUNTRY_NAMES.items(), 7):
         data = shopee_totals.get(cur, {})
         fx  = data.get('fx', 0.0)
         krw = data.get('krw', 0)
         shopee_total_krw += krw
         _datarow(r, name, fx, krw)
-    _totalrow(20, shopee_total_krw)
+    _totalrow(13, shopee_total_krw)
 
-    # 라자다
-    ws['G22'] = '라자다'
-    _style(ws['G22'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr('G23', '국가'); _hdr('H23', '외화'); _hdr('I23', '원화')
-
+    # 라자다 (제목 B15, 헤더 16행, 데이터 17~20, 총합 21)
+    ws['B15'] = '라자다'
+    _style(ws['B15'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
+    _hdr(2, 16, '국가'); _hdr(3, 16, '외화'); _hdr(4, 16, '원화')
     lazada_total_krw = 0
     LAZADA_COUNTRIES = ['MYR', 'PHP', 'SGD', 'VND']
-    for r, cur in enumerate(LAZADA_COUNTRIES, 24):
+    for r, cur in enumerate(LAZADA_COUNTRIES, 17):
         data = lazada_totals.get(cur, {})
         fx  = data.get('fx', 0.0)
         krw = data.get('krw', 0)
         lazada_total_krw += krw
         _datarow(r, COUNTRY_NAMES.get(cur, cur), fx, krw)
-    _totalrow(28, lazada_total_krw)
+    _totalrow(21, lazada_total_krw)
 
-    # 큐텐
-    ws['G30'] = '큐텐'
-    _style(ws['G30'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr('G31', '외화'); _hdr('H31', '평균환율'); _hdr('I31', '원화')
-
+    # 큐텐 (제목 B23, 헤더 24행, 데이터 25)
+    ws['B23'] = '큐텐'
+    _style(ws['B23'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
+    _hdr(2, 24, '외화'); _hdr(3, 24, '평균환율'); _hdr(4, 24, '원화')
     if qoo10_data:
         jpy_amount = qoo10_data.get('amount', 0)
         krw = qoo10_data.get('total_krw') or round(jpy_amount * jpy_rate / 100)
-        ws.cell(row=32, column=7, value=jpy_amount)
-        ws.cell(row=32, column=8, value=jpy_rate)
-        ws.cell(row=32, column=9, value=krw)
-        _style(ws.cell(row=32, column=7), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
-        _style(ws.cell(row=32, column=8), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
-        _style(ws.cell(row=32, column=9), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        ws.cell(row=25, column=2, value=jpy_amount)
+        ws.cell(row=25, column=3, value=jpy_rate)
+        ws.cell(row=25, column=4, value=krw)
+        _style(ws.cell(row=25, column=2), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        _style(ws.cell(row=25, column=3), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
+        _style(ws.cell(row=25, column=4), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
 
 
 # ── 전체 엑셀 생성 ───────────────────────────────────────────────
