@@ -37,18 +37,56 @@ SHOPEE_FILE_PATTERNS = {
 def detect_pdf_type(pdf_path: str) -> str:
     """파일명으로 소포수령증 종류 판단 → 'shopee' | 'lazada' | 'qoo10' | 'unknown'"""
     name = Path(pdf_path).name
+    lower = name.lower()
+    if '라자다' in name or 'lazada' in lower:
+        return 'lazada'
+    if '큐텐' in name or 'qoo10' in lower:
+        return 'qoo10'
+    # 쇼피: 업체명과 무관하게 파일명의 국가코드 패턴(_MY_, _TW_ 등)으로 인식
+    if re.search(r'_(MY|PH|SG|TH|TW|VN|BR|JP)_', name):
+        return 'shopee'
+    # 기존 호환: 유엠 키워드
     if '유엠(UM)_' in name or '유엠_' in name:
         return 'shopee'
-    if '라자다' in name or 'lazada' in name.lower():
-        return 'lazada'
-    if '큐텐' in name or 'qoo10' in name.lower() or 'Qoo10' in name:
-        return 'qoo10'
     return 'unknown'
 
 
 # ─────────────────────────────────────────────────────────────────
 # 쇼피 PDF 파싱
 # ─────────────────────────────────────────────────────────────────
+
+def _extract_submitter(full_text: str) -> dict:
+    """소포수령증 '1. 제출자 인적사항'에서 상호·사업자번호·대표자·주소 추출."""
+    sub = {'name': '', 'biz_no': '', 'ceo': '', 'address': ''}
+    m = re.search(r'사업자등록번호\s+(\d{3}-\d{2}-\d{5})', full_text)
+    if m: sub['biz_no'] = m.group(1)
+    m = re.search(r'상호\(법인명\)\s+(.+)', full_text)
+    if m: sub['name'] = m.group(1).strip()
+    m = re.search(r'대표자\s*성명\s+(\S+)', full_text)
+    if m: sub['ceo'] = m.group(1).strip()
+    # 주소: 제출자 섹션의 비라벨 줄 + 거래기간 줄 끝의 (괄호)
+    addr = []
+    in_sec = False
+    for ln in full_text.splitlines():
+        t = ln.strip()
+        if t.startswith('1. 제출자'):
+            in_sec = True
+            continue
+        if t.startswith('2.'):
+            break
+        if not in_sec:
+            continue
+        if any(t.startswith(k) for k in ('사업자등록번호', '상호(법인명)', '대표자', '거래기간')):
+            if t.startswith('거래기간'):
+                mm = re.search(r'(\([^)]+\))\s*$', t)
+                if mm:
+                    addr.append(mm.group(1))
+            continue
+        if t:
+            addr.append(t)
+    sub['address'] = ' '.join(addr)
+    return sub
+
 
 def parse_shopee_pdf(pdf_path: str) -> dict:
     """
@@ -170,8 +208,11 @@ def parse_shopee_pdf(pdf_path: str) -> dict:
     if transactions:
         carrier = transactions[0]['carrier']
 
+    submitter = _extract_submitter(full_text)
+
     return {
         'type':         'shopee',
+        'submitter':    submitter,
         'carrier':      carrier,
         'country':      country,
         'currency':     currency,
