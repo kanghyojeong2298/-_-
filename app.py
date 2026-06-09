@@ -182,12 +182,21 @@ st.divider()
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
 st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다, 큐텐재팬 파일을 한꺼번에 올려주세요")
 
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
 uploaded_files = st.file_uploader(
     "PDF 파일 선택 (여러 개 동시 선택 가능)",
     type=["pdf"],
     accept_multiple_files=True,
     label_visibility="collapsed",
+    key=f"pdf_uploader_{st.session_state.uploader_key}",
 )
+
+if st.button("🔄 초기화 (업로드 파일·큐텐 입력 비우기)"):
+    st.session_state.uploader_key += 1
+    st.session_state.qoo10_entries = []
+    st.rerun()
 
 if uploaded_files:
     st.markdown("**업로드된 파일:**")
