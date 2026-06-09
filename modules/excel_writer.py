@@ -47,6 +47,21 @@ def _style(cell, font=None, fill=None, align=None, border=None, num_format=None)
     if num_format: cell.number_format = num_format
 
 
+# ── 소포수령증 표 열 그룹 (값 열 + 사이 빈 열을 병합해 깔끔하게 이어줌) ──
+_RECEIPT_GROUPS_2 = [(1, 3), (4, 6), (7, 10), (11, 12), (13, 15), (16, 19)]
+_RECEIPT_GROUPS_3 = [(1, 3), (4, 6), (7, 10), (11, 12), (13, 15), (16, 17), (18, 18), (19, 19)]
+
+
+def _merge_row(ws, row, groups, border=None):
+    """한 행에서 각 열 그룹을 병합하고(2칸 이상), 그룹 전체에 테두리를 적용."""
+    for c1, c2 in groups:
+        if c2 > c1:
+            ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+        if border is not None:
+            for col in range(c1, c2 + 1):
+                ws.cell(row=row, column=col).border = border
+
+
 def _get_rate(rates: dict, currency: str, date_str: str) -> float:
     """
     발행일(write_date) 기준 환율 반환.
@@ -188,6 +203,9 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
         c = ws[f'{col_letter}7']
         c.value = val
         _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
+    _merge_row(ws, 7, _RECEIPT_GROUPS_2, border=THIN_BORDER)
+    for col_letter in headers7:
+        _style(ws[f'{col_letter}7'], font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
     # ── 행 8: 데이터 ──
     ws['A8'] = carrier
@@ -196,14 +214,18 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
     ws['K8'] = currency
     ws['M8'] = shopee_data.get('total_qty', 0)
     ws['P8'] = shopee_data.get('total_amount', 0.0)
+    _merge_row(ws, 8, _RECEIPT_GROUPS_2, border=THIN_BORDER)
     for col in ['A', 'D', 'G', 'K', 'M', 'P']:
-        _style(ws[f'{col}8'], font=FONT_DEFAULT, align=CENTER)
+        _style(ws[f'{col}8'], font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
 
     # ── 행 9: 합계 ──
-    ws['F9'] = '합계'
     ws['M9'] = shopee_data.get('total_qty', 0)
     ws['P9'] = shopee_data.get('total_amount', 0.0)
-    _style(ws['F9'], font=FONT_BOLD)
+    ws['G9'] = '합계'
+    _merge_row(ws, 9, _RECEIPT_GROUPS_2, border=THIN_BORDER)
+    _style(ws['G9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
+    _style(ws['M9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
+    _style(ws['P9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
 
     # ── 행 10: 섹션 3 제목 ──
     ws.merge_cells('A10:O10')
@@ -219,6 +241,9 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
         c = ws[f'{col_letter}11']
         c.value = val
         _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
+    _merge_row(ws, 11, _RECEIPT_GROUPS_3, border=THIN_BORDER)
+    for col_letter in col_headers:
+        _style(ws[f'{col_letter}11'], font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
     # ── 행 12+: 거래 데이터 (각 행의 발행일 기준 환율 개별 적용) ──
     row = 12
@@ -238,6 +263,7 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
         ws.cell(row=row, column=18, value=tx_rate)
         ws.cell(row=row, column=19, value=krw)
 
+        _merge_row(ws, row, _RECEIPT_GROUPS_3, border=THIN_BORDER)
         for col in [1, 4, 7, 11, 13, 16, 18, 19]:
             c = ws.cell(row=row, column=col)
             _style(c, font=FONT_DEFAULT, align=CENTER if col != 1 else LEFT, border=THIN_BORDER)
@@ -292,8 +318,8 @@ def write_currency_template_sheet(ws, currency: str,
     ws.column_dimensions['F'].width = 14
     ws.column_dimensions['G'].width = 14
 
-    # 라자다 발행일 환율 (단일 날짜 — 라자다는 거래일자 없음)
-    lazada_rate = _get_rate(rates, currency, lazada_write_date) if lazada_write_date else 0.0
+    # 라자다 환율: 큐텐과 동일하게 평균환율 사용
+    lazada_rate = rates.get(currency, {}).get('average', 0.0)
     divisor     = RATE_DIVISOR.get(currency, 1)   # VND·JPY → 100, 나머지 → 1
 
     # ── 쇼피 소계: 각 거래의 발행일 기준 환율 합산 ──
@@ -645,7 +671,7 @@ def generate_excel(
         for it in lazada_result.get('items', []):
             cur = it.get('currency', '')
             if cur not in laz_rate_by_cur:
-                laz_rate_by_cur[cur] = _get_rate(rates, cur, lazada_write_date)
+                laz_rate_by_cur[cur] = rates.get(cur, {}).get('average', 0.0)
             rate = laz_rate_by_cur[cur]
             div  = RATE_DIVISOR.get(cur, 1)
             krw  = round(it.get('amount', 0.0) * rate / div)
