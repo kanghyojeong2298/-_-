@@ -168,9 +168,14 @@ st.markdown("""
                   border-left:4px solid #f9a825; margin-bottom:0.5rem; }
     .info-box   { background:#e3f2fd; border-radius:8px; padding:0.8rem 1.2rem;
                   border-left:4px solid #1565c0; margin-bottom:0.5rem; }
-    /* 초기화 등 작은 버튼: 글자 작게 + 줄바꿈 방지 */
+    /* 초기화 등 작은 버튼: 글자 작게 + 줄바꿈 방지 (안쪽 요소까지) */
+    div[data-testid="column"] div.stButton > button,
+    div[data-testid="column"] div.stButton > button * {
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
     div[data-testid="column"] div.stButton > button {
-        font-size: 11px; padding: 2px 8px; white-space: nowrap; min-height: 0;
+        padding: 2px 6px !important; min-height: 0 !important; line-height: 1.2 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -187,7 +192,7 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
-_c_desc, _c_reset = st.columns([7, 1])
+_c_desc, _c_reset = st.columns([6, 1])
 _c_desc.caption("쇼피(MY/PH/SG/TH/TW/VN/BR/MX), 라자다 파일을 한꺼번에 올려주세요  \n*큐텐재팬은 STEP2에서 진행해주세요")
 if _c_reset.button("🔄 초기화"):
     st.session_state.uploader_key += 1
