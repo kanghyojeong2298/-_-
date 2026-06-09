@@ -59,17 +59,30 @@ DEFAULT_RATES = {
 # data/fixed_rates_2025.json 에 통화별 일별 매매기준율이 들어 있습니다.
 # 직원이 환율을 입력할 필요 없이, 소포수령증 발행일에 맞는 환율이 자동 적용됩니다.
 # 환율을 갱신하려면 이 JSON 파일만 교체(수정)하면 전체에 반영됩니다.
-_FIXED_RATES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'fixed_rates_2025.json')
 AUTO_RATE_LABEL = "🔒 자동 (내장 고정환율)"
+
+# 환율 JSON을 여러 위치에서 자동 탐색 (data/ 폴더 안이든, 루트든, 어디 두든 찾음)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_FIXED_RATES_CANDIDATES = [
+    os.path.join(_HERE, 'data', 'fixed_rates_2025.json'),
+    os.path.join(_HERE, 'fixed_rates_2025.json'),
+    os.path.join(os.getcwd(), 'data', 'fixed_rates_2025.json'),
+    os.path.join(os.getcwd(), 'fixed_rates_2025.json'),
+]
 
 
 def load_fixed_rates() -> dict:
     """내장 JSON에서 통화별 일별 환율을 읽어, 앱 내부 환율 형식(daily 포함)으로 반환."""
     import json
-    try:
-        with open(_FIXED_RATES_PATH, encoding='utf-8') as f:
-            raw = json.load(f)
-    except Exception:
+    raw = None
+    for _p in _FIXED_RATES_CANDIDATES:
+        try:
+            with open(_p, encoding='utf-8') as f:
+                raw = json.load(f)
+            break
+        except Exception:
+            continue
+    if raw is None:
         return {}
     rates_raw = raw.get('rates', {})
     result = {}
