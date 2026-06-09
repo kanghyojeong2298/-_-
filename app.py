@@ -179,11 +179,16 @@ st.divider()
 # ══════════════════════════════════════════════════════════════════
 # STEP 1 — PDF 업로드
 # ══════════════════════════════════════════════════════════════════
-st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
-st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다, 큐텐재팬 파일을 한꺼번에 올려주세요")
-
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+
+_c_title, _c_reset = st.columns([4, 1])
+_c_title.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
+if _c_reset.button("🔄 초기화"):
+    st.session_state.uploader_key += 1
+    st.session_state.qoo10_entries = []
+    st.rerun()
+st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다 파일을 한꺼번에 올려주세요  \n*큐텐재팬은 STEP2에서 진행해주세요")
 
 uploaded_files = st.file_uploader(
     "PDF 파일 선택 (여러 개 동시 선택 가능)",
@@ -192,11 +197,6 @@ uploaded_files = st.file_uploader(
     label_visibility="collapsed",
     key=f"pdf_uploader_{st.session_state.uploader_key}",
 )
-
-if st.button("🔄 초기화 (업로드 파일·큐텐 입력 비우기)"):
-    st.session_state.uploader_key += 1
-    st.session_state.qoo10_entries = []
-    st.rerun()
 
 if uploaded_files:
     st.markdown("**업로드된 파일:**")
@@ -298,8 +298,9 @@ if rate_mode == AUTO_RATE_LABEL:
         _period  = next(iter(_fr.values())).get('period', '')
         st.markdown(
             '<div class="info-box">'
-            '✅ <b>환율 자동 적용</b> — 직원은 환율을 입력할 필요가 없습니다.<br>'
-            '소포수령증 <b>발행일에 맞는 그날 환율</b>이 자동으로 적용됩니다.<br>'
+            '✅ <b>환율 자동 적용</b><br>'
+            '환율을 직접 입력하지 않아도 됩니다.<br>'
+            '소포수령증 <b>발행일에 맞는 날짜의 환율</b>로 자동 적용됩니다.<br>'
             f'<small>내장 환율 기간: {_period}<br>적용 통화: {_curs}</small>'
             '</div>',
             unsafe_allow_html=True,
