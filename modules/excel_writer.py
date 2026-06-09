@@ -502,23 +502,46 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
             c = ws.cell(row=18, column=col, value=h)
             _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
-        jpy_amount = qoo10_data.get('amount', 0)
-        krw_amount = round(jpy_amount * jpy_rate / 100)  # JPY는 100엔 기준
+        entries = qoo10_data.get('entries') or [{
+            'tracking_no': qoo10_data.get('tracking_no', ''),
+            'qty':    qoo10_data.get('qty', 0),
+            'amount': qoo10_data.get('amount', 0),
+            'rate':   jpy_rate,
+            'krw':    round(qoo10_data.get('amount', 0) * jpy_rate / 100),
+        }]
 
-        ws.cell(row=18, column=8, value=f'평균환율: {jpy_rate} (100엔)')  # 적용 환율 표시
-        ws.cell(row=19, column=1, value='Qoo10')
-        ws.cell(row=19, column=2, value='국제로지스틱')
-        ws.cell(row=19, column=3, value='KR')
-        ws.cell(row=19, column=4, value='JP')
-        ws.cell(row=19, column=5, value=qoo10_data.get('tracking_no', ''))
-        ws.cell(row=19, column=6, value=f"{qoo10_data.get('qty', '')} 건")
-        ws.cell(row=19, column=7, value=jpy_amount)
-        ws.cell(row=19, column=8, value=krw_amount)
+        ws.cell(row=18, column=8, value='적용: 발행일별 환율 (100엔)')
 
-        ws.cell(row=20, column=1, value='당기 해외배송 합계')
-        ws.cell(row=20, column=6, value=f"{qoo10_data.get('qty', '')} 건")
-        ws.cell(row=20, column=7, value=jpy_amount)
-        ws.cell(row=20, column=8, value=krw_amount)
+        r = 19
+        total_jpy = 0
+        total_krw = 0
+        total_qty = 0
+        for e in entries:
+            e_rate = e.get('rate', jpy_rate)
+            e_amt  = e.get('amount', 0)
+            e_krw  = e.get('krw', round(e_amt * e_rate / 100))
+            e_qty  = e.get('qty', 0)
+            ws.cell(row=r, column=1, value='Qoo10')
+            ws.cell(row=r, column=2, value='국제로지스틱')
+            ws.cell(row=r, column=3, value='KR')
+            ws.cell(row=r, column=4, value='JP')
+            ws.cell(row=r, column=5, value=e.get('tracking_no', ''))
+            ws.cell(row=r, column=6, value=f"{e_qty} 건")
+            ws.cell(row=r, column=7, value=e_amt)
+            ws.cell(row=r, column=8, value=e_krw)
+            for col in range(1, 9):
+                _style(ws.cell(row=r, column=col), font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
+            total_jpy += e_amt
+            total_krw += e_krw
+            total_qty += e_qty
+            r += 1
+
+        ws.cell(row=r, column=1, value='당기 해외배송 합계')
+        ws.cell(row=r, column=6, value=f"{total_qty} 건")
+        ws.cell(row=r, column=7, value=total_jpy)
+        ws.cell(row=r, column=8, value=total_krw)
+        for col in range(1, 9):
+            _style(ws.cell(row=r, column=col), font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
     else:
         ws['A12'] = '⚠️ 큐텐 데이터 없음 — STEP 2에서 수동 입력하세요'
         _style(ws['A12'], font=Font(name='맑은 고딕', size=9, color='FF0000'))
@@ -530,21 +553,38 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
                          qoo10_data: Optional[dict], jpy_rate: float,
                          year_month: str):
     """총집계 시트 작성"""
+    NUM  = '#,##0'        # 원화 (정수, 천단위)
+    NUM2 = '#,##0.00'     # 외화 (소수 2자리)
+
+    # 열 너비 — 숫자가 지수표기(E+08)로 깨지지 않도록 충분히
+    ws.column_dimensions['G'].width = 16
+    ws.column_dimensions['H'].width = 14
+    ws.column_dimensions['I'].width = 16
+
     ws['A1'] = '유엠(UM)(529-12-02268)'
     _style(ws['A1'], font=FONT_TITLE)
 
     ws['B2'] = year_month  # 예: '2025년 12월'
     _style(ws['B2'], font=FONT_BOLD)
 
-    # 쇼피 소계
-    ws['G4'] = '쇼피'
-    _style(ws['G4'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    ws['G13'] = '국가'
-    ws['H13'] = '외화'
-    ws['I13'] = '원화'
-    _style(ws['G13'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
-    _style(ws['H13'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
-    _style(ws['I13'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
+    def _hdr(ref, val):
+        ws[ref] = val
+        _style(ws[ref], font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
+
+    def _datarow(r, name, fx, krw):
+        ws.cell(row=r, column=7, value=name)
+        ws.cell(row=r, column=8, value=fx)
+        ws.cell(row=r, column=9, value=krw)
+        _style(ws.cell(row=r, column=7), font=FONT_DEFAULT, align=LEFT,  border=THIN_BORDER)
+        _style(ws.cell(row=r, column=8), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
+        _style(ws.cell(row=r, column=9), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+
+    def _totalrow(r, krw):
+        ws.cell(row=r, column=7, value='총합')
+        ws.cell(row=r, column=9, value=krw)
+        _style(ws.cell(row=r, column=7), font=FONT_BOLD, align=LEFT,  border=THIN_BORDER, fill=GRAY_FILL)
+        _style(ws.cell(row=r, column=8), border=THIN_BORDER, fill=GRAY_FILL)
+        _style(ws.cell(row=r, column=9), font=FONT_BOLD, align=RIGHT, border=THIN_BORDER, fill=GRAY_FILL, num_format=NUM)
 
     COUNTRY_NAMES = {
         'MYR': '말레이시아(MYR)', 'PHP': '필리핀(PHP)',
@@ -552,24 +592,24 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
         'TWD': '대만(TWD)', 'VND': '베트남(VND)',
     }
 
+    # 쇼피
+    ws['G4'] = '쇼피'
+    _style(ws['G4'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
+    _hdr('G13', '국가'); _hdr('H13', '외화'); _hdr('I13', '원화')
+
     shopee_total_krw = 0
     for r, (cur, name) in enumerate(COUNTRY_NAMES.items(), 14):
         data = shopee_totals.get(cur, {})
         fx  = data.get('fx', 0.0)
         krw = data.get('krw', 0)
         shopee_total_krw += krw
-        ws.cell(row=r, column=7, value=name)
-        ws.cell(row=r, column=8, value=fx)
-        ws.cell(row=r, column=9, value=krw)
+        _datarow(r, name, fx, krw)
+    _totalrow(20, shopee_total_krw)
 
-    ws.cell(row=20, column=7, value='총합')
-    ws.cell(row=20, column=9, value=shopee_total_krw)
-    _style(ws.cell(row=20, column=7), font=FONT_BOLD)
-
-    # 라자다 소계
+    # 라자다
     ws['G22'] = '라자다'
     _style(ws['G22'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    ws['G23'] = '국가'; ws['H23'] = '외화'; ws['I23'] = '원화'
+    _hdr('G23', '국가'); _hdr('H23', '외화'); _hdr('I23', '원화')
 
     lazada_total_krw = 0
     LAZADA_COUNTRIES = ['MYR', 'PHP', 'SGD', 'VND']
@@ -578,25 +618,23 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
         fx  = data.get('fx', 0.0)
         krw = data.get('krw', 0)
         lazada_total_krw += krw
-        ws.cell(row=r, column=7, value=COUNTRY_NAMES.get(cur, cur))
-        ws.cell(row=r, column=8, value=fx)
-        ws.cell(row=r, column=9, value=krw)
-
-    ws.cell(row=28, column=7, value='총합')
-    ws.cell(row=28, column=9, value=lazada_total_krw)
-    _style(ws.cell(row=28, column=7), font=FONT_BOLD)
+        _datarow(r, COUNTRY_NAMES.get(cur, cur), fx, krw)
+    _totalrow(28, lazada_total_krw)
 
     # 큐텐
     ws['G30'] = '큐텐'
     _style(ws['G30'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    ws['G31'] = '외화'; ws['H31'] = '평균환율'; ws['I31'] = '원화'
+    _hdr('G31', '외화'); _hdr('H31', '평균환율'); _hdr('I31', '원화')
 
     if qoo10_data:
         jpy_amount = qoo10_data.get('amount', 0)
-        krw = round(jpy_amount * jpy_rate / 100)
+        krw = qoo10_data.get('total_krw') or round(jpy_amount * jpy_rate / 100)
         ws.cell(row=32, column=7, value=jpy_amount)
         ws.cell(row=32, column=8, value=jpy_rate)
         ws.cell(row=32, column=9, value=krw)
+        _style(ws.cell(row=32, column=7), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        _style(ws.cell(row=32, column=8), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
+        _style(ws.cell(row=32, column=9), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
 
 
 # ── 전체 엑셀 생성 ───────────────────────────────────────────────
@@ -640,6 +678,27 @@ def generate_excel(
     if qoo10_result:
         qoo10_write_date = (qoo10_result.get('write_date', '')
                             or qoo10_result.get('period_end', ''))
+
+        # ── 큐텐 건별 환율·원화 계산 (entries) ──
+        q_entries = qoo10_result.get('entries')
+        if not q_entries:
+            q_entries = [{
+                'tracking_no': qoo10_result.get('tracking_no', ''),
+                'qty':         qoo10_result.get('qty', 0),
+                'amount':      qoo10_result.get('amount', 0),
+                'write_date':  qoo10_result.get('write_date', ''),
+            }]
+        q_total_krw = 0
+        for e in q_entries:
+            wd = e.get('write_date', '') or qoo10_result.get('period_end', '')
+            r  = _get_rate(rates, 'JPY', wd) or jpy_rate
+            e['rate'] = r
+            e['krw']  = round(e.get('amount', 0) * r / 100)
+            q_total_krw += e['krw']
+        qoo10_result['entries']   = q_entries
+        qoo10_result['amount']    = sum(e.get('amount', 0) for e in q_entries)
+        qoo10_result['qty']       = sum(e.get('qty', 0) for e in q_entries)
+        qoo10_result['total_krw'] = q_total_krw
 
     # ── 총집계 ──────────────────────────────────────────────
     ws_summary = wb.create_sheet('총집계')
@@ -702,20 +761,24 @@ def generate_excel(
         c = ws_jpy.cell(row=4, column=col, value=h)
         _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
     if qoo10_result:
-        jpy_amount = qoo10_result.get('amount', 0)
-        krw = round(jpy_amount * jpy_rate / 100)
         ws_jpy.cell(row=1, column=5, value='큐텐')
-        ws_jpy.cell(row=1, column=6, value=jpy_amount)
-        ws_jpy.cell(row=1, column=7, value=krw)
-        # 데이터행 — 선적일자에 발행일 사용
-        date_str = ''
-        if qoo10_write_date:
-            date_str = int(qoo10_write_date.replace('-', ''))
-        ws_jpy.cell(row=5, column=3, value=date_str or None)
-        ws_jpy.cell(row=5, column=4, value='JPY')
-        ws_jpy.cell(row=5, column=5, value=jpy_rate)
-        ws_jpy.cell(row=5, column=6, value=jpy_amount)
-        ws_jpy.cell(row=5, column=7, value=krw)
+        ws_jpy.cell(row=1, column=6, value=qoo10_result.get('amount', 0))
+        ws_jpy.cell(row=1, column=7, value=qoo10_result.get('total_krw', 0))
+        _jr = 5
+        for e in qoo10_result.get('entries', []):
+            wd = e.get('write_date', '') or qoo10_write_date
+            date_str = ''
+            if wd:
+                try:
+                    date_str = int(str(wd).replace('-', '').replace('.', ''))
+                except ValueError:
+                    date_str = ''
+            ws_jpy.cell(row=_jr, column=3, value=date_str or None)
+            ws_jpy.cell(row=_jr, column=4, value='JPY')
+            ws_jpy.cell(row=_jr, column=5, value=e.get('rate', jpy_rate))
+            ws_jpy.cell(row=_jr, column=6, value=e.get('amount', 0))
+            ws_jpy.cell(row=_jr, column=7, value=e.get('krw', 0))
+            _jr += 1
 
     # ── 큐텐(소포수령증) ──
     ws_q10 = wb.create_sheet('큐텐(소포수령증)')
