@@ -180,7 +180,7 @@ st.divider()
 # STEP 1 — PDF 업로드
 # ══════════════════════════════════════════════════════════════════
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
-st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다, 큐텐재팬 파일을 한꺼번에 올려주세요")
+st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다 파일을 한꺼번에 올려주세요. *큐텐재팬은 STEP 2에서 진행해주세요.")
 
 uploaded_files = st.file_uploader(
     "PDF 파일 선택 (여러 개 동시 선택 가능)",
