@@ -55,6 +55,42 @@ DEFAULT_RATES = {
     "TWD": 0.0, "VND": 0.0, "JPY": 0.0,
 }
 
+# ── 고정환율(내장) 자동 적용 ─────────────────────────────────────────
+# data/fixed_rates_2025.json 에 통화별 일별 매매기준율이 들어 있습니다.
+# 직원이 환율을 입력할 필요 없이, 소포수령증 발행일에 맞는 환율이 자동 적용됩니다.
+# 환율을 갱신하려면 이 JSON 파일만 교체(수정)하면 전체에 반영됩니다.
+_FIXED_RATES_PATH = os.path.join(os.path.dirname(__file__), 'data', 'fixed_rates_2025.json')
+AUTO_RATE_LABEL = "🔒 자동 (내장 고정환율)"
+
+
+def load_fixed_rates() -> dict:
+    """내장 JSON에서 통화별 일별 환율을 읽어, 앱 내부 환율 형식(daily 포함)으로 반환."""
+    import json
+    try:
+        with open(_FIXED_RATES_PATH, encoding='utf-8') as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+    rates_raw = raw.get('rates', {})
+    result = {}
+    for cur, daymap in rates_raw.items():
+        daily = [{'date': d, 'rate': float(r), 'change': 0.0, 'cross': 0.0}
+                 for d, r in sorted(daymap.items())]
+        if not daily:
+            continue
+        rs = [d['rate'] for d in daily if d['rate'] > 0]
+        result[cur] = {
+            'period':        f"{daily[0]['date']} ~ {daily[-1]['date']}",
+            'currency':      cur,
+            'currency_name': CURRENCY_NAMES.get(cur, cur),
+            'average':       round(sum(rs) / len(rs), 2) if rs else 0.0,
+            'min':           min(rs) if rs else 0.0,
+            'max':           max(rs) if rs else 0.0,
+            'min_date': '', 'max_date': '', 'range': 0.0, 'cross_rate': 0.0,
+            'daily':         daily,
+        }
+    return result
+
 # ── 페이지 설정 ─────────────────────────────────────────────────
 st.set_page_config(page_title="소포수령증 자동화", page_icon="📦", layout="centered")
 
@@ -189,7 +225,7 @@ st.divider()
 # ══════════════════════════════════════════════════════════════════
 # STEP 3 — 환율 입력
 # ══════════════════════════════════════════════════════════════════
-st.markdown("### 💱 STEP 3 — 환율 입력")
+st.markdown("### 💱 STEP 3 — 환율")
 st.markdown(
     "📌 **소포수령증 발행일(작성일자)** 기준 환율을 적용합니다 (주말·공휴일이면 직전 영업일)  \n"
     "👉 환율 조회: [서울외국환중개(SMBS)](http://www.smbs.biz/ExRate/StdExRate.jsp)"
@@ -198,7 +234,7 @@ st.write("")
 
 rate_mode = st.radio(
     "환율 입력 방식",
-    ["📊 SMBS 엑셀 업로드", "✏️ 직접 입력"],
+    [AUTO_RATE_LABEL, "📊 SMBS 엑셀 업로드", "✏️ 직접 입력"],
     horizontal=True,
     label_visibility="collapsed",
 )
@@ -206,7 +242,29 @@ rate_mode = st.radio(
 manual_rates = {cur: 0.0 for cur in CURRENCIES}
 smbs_excel_files = []
 
-if rate_mode == "📊 SMBS 엑셀 업로드":
+if rate_mode == AUTO_RATE_LABEL:
+    _fr = load_fixed_rates()
+    if _fr:
+        _curs   = ", ".join(_fr.keys())
+        _missing = [c for c in CURRENCIES if c not in _fr]
+        _period  = next(iter(_fr.values())).get('period', '')
+        st.markdown(
+            '<div class="info-box">'
+            '✅ <b>환율 자동 적용</b> — 직원은 환율을 입력할 필요가 없습니다.<br>'
+            '소포수령증 <b>발행일에 맞는 그날 환율</b>이 자동으로 적용됩니다.<br>'
+            f'<small>내장 환율 기간: {_period}<br>적용 통화: {_curs}</small>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if _missing:
+            st.caption(f"⚠️ 내장 환율 없는 통화: {', '.join(_missing)} → 0 처리 (필요 시 다른 모드 사용)")
+    else:
+        st.warning(
+            "⚠️ 내장 환율 파일(`data/fixed_rates_2025.json`)을 찾을 수 없습니다.  \n"
+            "다른 입력 방식을 선택하거나, 데이터 파일을 추가해 주세요."
+        )
+
+elif rate_mode == "📊 SMBS 엑셀 업로드":
     st.markdown(
         '<div class="info-box">'
         '<b>SMBS 엑셀 다운로드 방법:</b><br>'
@@ -535,16 +593,22 @@ if process_btn and uploaded_files:
 
             rates = {}
 
-            if rate_mode == "📊 SMBS 엑셀 업로드" and smbs_excel_files:
-                smbs_data = parse_smbs_excel_files(smbs_excel_files)
-                rate_log  = []
-                missing   = []
+            # 환율 소스 결정: 자동(내장) → SMBS 업로드 → (둘 다 아니면) 직접 입력
+            rate_source = None
+            if rate_mode == AUTO_RATE_LABEL:
+                rate_source = load_fixed_rates()
+            elif rate_mode == "📊 SMBS 엑셀 업로드" and smbs_excel_files:
+                rate_source = parse_smbs_excel_files(smbs_excel_files)
+
+            if rate_source is not None:
+                from modules.exchange_rate import get_rate_for_date
+                rate_log = []
+                missing  = []
 
                 for cur in CURRENCIES:
-                    if cur in smbs_data and smbs_data[cur].get('daily'):
-                        rates[cur] = smbs_data[cur]
-                        # 발행일(write_date) 기준 환율 표시 — 없으면 period_end fallback
-                        from modules.exchange_rate import get_rate_for_date
+                    if cur in rate_source and rate_source[cur].get('daily'):
+                        rates[cur] = rate_source[cur]
+                        # 발행일(write_date) 기준으로 그날 환율 자동 선택 (없으면 직전 영업일)
                         if cur == 'JPY' and qoo10_result:
                             wd = (qoo10_result.get('write_date', '')
                                   or qoo10_result.get('period_end', fetch_end))
@@ -559,11 +623,11 @@ if process_btn and uploaded_files:
                                 wd = fetch_end
                         else:
                             wd = fetch_end
-                        r = get_rate_for_date(smbs_data[cur], wd)
+                        r = get_rate_for_date(rate_source[cur], wd)
                         rate_log.append(f"✅ {cur}: **{r:.2f}** (발행일 {wd} 기준)")
                     else:
                         rates[cur] = _build_rate_dict(cur, 0.0, fetch_start, fetch_end)
-                        rate_log.append(f"⚠️ {cur}: 엑셀 없음 → 0 (미입력)")
+                        rate_log.append(f"⚠️ {cur}: 환율 데이터 없음 → 0")
                         missing.append(cur)
 
                 if missing:
@@ -571,7 +635,7 @@ if process_btn and uploaded_files:
                         st.markdown("**📋 파싱 결과**")
                         for log in parse_log:
                             st.markdown(log)
-                        st.warning(f"아래 통화 엑셀이 없습니다: **{', '.join(missing)}**  \n해당 통화는 환율 0으로 처리됩니다.")
+                        st.warning(f"환율 데이터 없는 통화: **{', '.join(missing)}** → 0으로 처리됩니다.")
 
             else:
                 # 직접 입력
