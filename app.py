@@ -168,6 +168,10 @@ st.markdown("""
                   border-left:4px solid #f9a825; margin-bottom:0.5rem; }
     .info-box   { background:#e3f2fd; border-radius:8px; padding:0.8rem 1.2rem;
                   border-left:4px solid #1565c0; margin-bottom:0.5rem; }
+    /* 초기화 등 작은 버튼: 글자 작게 + 줄바꿈 방지 */
+    div[data-testid="column"] div.stButton > button {
+        font-size: 11px; padding: 2px 8px; white-space: nowrap; min-height: 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
