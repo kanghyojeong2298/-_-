@@ -38,6 +38,16 @@ RATE_DIVISOR = {
     'VND': 100,   # 100동 기준
 }
 
+# 제출자(판매자) 정보 기본값 — PDF에서 못 읽었을 때만 사용
+DEFAULT_SUBMITTER = {
+    'name': '유엠(UM)', 'biz_no': '529-12-02268',
+    'ceo': '맹진열', 'address': '서울특별시 광진구 광나루로 556, 1동 2층',
+}
+
+# 숫자 천단위 콤마 서식
+NUM_FMT  = '#,##0'        # 정수(수량·원화)
+NUM_FMT2 = '#,##0.00'     # 소수(외화·환율)
+
 
 def _style(cell, font=None, fill=None, align=None, border=None, num_format=None):
     if font:      cell.font       = font
@@ -144,7 +154,7 @@ def write_exchange_rate_sheet(ws, rate_data: dict):
 
 # ── 쇼피 소포수령증 시트 작성 ───────────────────────────────────
 
-def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
+def write_shopee_sheet(ws, shopee_data: dict, rates: dict, submitter: dict = None) -> int:
     """
     쇼피(MYR) 등 국가별 쇼피 시트 작성
     환율: 소포수령증 발행일(write_date) 기준
@@ -160,11 +170,12 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
     divisor    = RATE_DIVISOR.get(currency, 1)   # VND·JPY → 100, 나머지 → 1
 
     # ── 행 1: 제목 헤더 ──
+    sub = submitter or shopee_data.get('submitter') or DEFAULT_SUBMITTER
     ws.merge_cells('A1:J1')
     ws['A1'] = (
         f"해외배송 소포 수령증\n"
         f"Registration No. 117-81-45551\n"
-        f"529-12-02268\n맹진열"
+        f"{sub.get('biz_no','')}\n{sub.get('ceo','')}"
     )
     _style(ws['A1'], font=FONT_BOLD, align=CENTER)
     ws.row_dimensions[1].height = 55
@@ -172,8 +183,7 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
     ws.merge_cells('L1:S1')
     ws['L1'] = (
         f"해외배송기간: {shopee_data.get('period_start','')} ~ {period_end}\n"
-        f"유엠(UM)               서울특별시 광진구\n"
-        f"광나루로 556, 1동 2층"
+        f"{sub.get('name','')}\n{sub.get('address','')}"
     )
     _style(ws['L1'], font=FONT_DEFAULT, align=LEFT)
 
@@ -216,7 +226,8 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
     ws['P8'] = shopee_data.get('total_amount', 0.0)
     _merge_row(ws, 8, _RECEIPT_GROUPS_2, border=THIN_BORDER)
     for col in ['A', 'D', 'G', 'K', 'M', 'P']:
-        _style(ws[f'{col}8'], font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
+        nf = NUM_FMT if col == 'M' else (NUM_FMT2 if col == 'P' else None)
+        _style(ws[f'{col}8'], font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER, num_format=nf)
 
     # ── 행 9: 합계 ──
     ws['M9'] = shopee_data.get('total_qty', 0)
@@ -224,8 +235,8 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
     ws['G9'] = '합계'
     _merge_row(ws, 9, _RECEIPT_GROUPS_2, border=THIN_BORDER)
     _style(ws['G9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
-    _style(ws['M9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
-    _style(ws['P9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
+    _style(ws['M9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER, num_format=NUM_FMT)
+    _style(ws['P9'], font=FONT_BOLD, align=CENTER, border=THIN_BORDER, num_format=NUM_FMT2)
 
     # ── 행 10: 섹션 3 제목 ──
     ws.merge_cells('A10:O10')
@@ -266,7 +277,8 @@ def write_shopee_sheet(ws, shopee_data: dict, rates: dict) -> int:
         _merge_row(ws, row, _RECEIPT_GROUPS_3, border=THIN_BORDER)
         for col in [1, 4, 7, 11, 13, 16, 18, 19]:
             c = ws.cell(row=row, column=col)
-            _style(c, font=FONT_DEFAULT, align=CENTER if col != 1 else LEFT, border=THIN_BORDER)
+            nf = {13: NUM_FMT, 16: NUM_FMT2, 18: NUM_FMT2, 19: NUM_FMT}.get(col)
+            _style(c, font=FONT_DEFAULT, align=CENTER if col != 1 else LEFT, border=THIN_BORDER, num_format=nf)
 
         row += 1
 
@@ -349,7 +361,8 @@ def write_currency_template_sheet(ws, currency: str,
     for row in [1, 2, 3]:
         for col in [5, 6, 7]:
             c = ws.cell(row=row, column=col)
-            _style(c, font=FONT_DEFAULT, align=RIGHT)
+            nf = NUM_FMT2 if col == 6 else (NUM_FMT if col == 7 else None)
+            _style(c, font=FONT_DEFAULT, align=RIGHT, num_format=nf)
 
     # ── 행 4: 헤더 ──
     headers = ['수출신고번호', '기타영세율건수', '선(기)적일자', '통화코드', '환율', '외화금액', '원화금액']
@@ -367,7 +380,8 @@ def write_currency_template_sheet(ws, currency: str,
         row_vals = [None, '1', date_int, currency, tx_rate, tx['amount'], krw]
         for col, v in enumerate(row_vals, 1):
             c = ws.cell(row=data_row, column=col, value=v)
-            _style(c, font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
+            nf = {5: NUM_FMT2, 6: NUM_FMT2, 7: NUM_FMT}.get(col)
+            _style(c, font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER, num_format=nf)
         data_row += 1
 
     # ── 라자다 거래 (발행일 기준 환율 적용) ──
@@ -376,13 +390,14 @@ def write_currency_template_sheet(ws, currency: str,
         row_vals = [None, '1', None, currency, lazada_rate, it['amount'], krw]
         for col, v in enumerate(row_vals, 1):
             c = ws.cell(row=data_row, column=col, value=v)
-            _style(c, font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
+            nf = {5: NUM_FMT2, 6: NUM_FMT2, 7: NUM_FMT}.get(col)
+            _style(c, font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER, num_format=nf)
         data_row += 1
 
 
 # ── 라자다 소포수령증 시트 ───────────────────────────────────────
 
-def write_lazada_receipt_sheet(ws, lazada_data: dict, rates: dict):
+def write_lazada_receipt_sheet(ws, lazada_data: dict, rates: dict, submitter: dict = None):
     """라자다(소포수령증) 시트"""
     ws.column_dimensions['A'].width = 60
     ws.column_dimensions['B'].width = 12
@@ -411,10 +426,10 @@ def write_lazada_receipt_sheet(ws, lazada_data: dict, rates: dict):
     ws['A3'] = '1.   제출자 인적 사항'
     _style(ws['A3'], font=FONT_BOLD)
 
+    sub = submitter or lazada_data.get('submitter') or DEFAULT_SUBMITTER
     info_rows = [
-        ('사업자등록번호', '529-12-02268', '상호(법인명)', '유엠(UM)'),
-        ('성명(대표자)',   '맹진열',       '사업장소재지',
-         '서울특별시 광진구 광나루로 556, 1동 2층 2호\n(구의동, 씨엔씨빌딩)'),
+        ('사업자등록번호', sub.get('biz_no', ''), '상호(법인명)', sub.get('name', '')),
+        ('성명(대표자)',   sub.get('ceo', ''),    '사업장소재지', sub.get('address', '')),
         ('거래기간',
          f"{lazada_data.get('period_start','')} – {period_end}",
          '작성일자', lazada_data.get('write_date', '')),
@@ -454,7 +469,7 @@ def write_lazada_receipt_sheet(ws, lazada_data: dict, rates: dict):
 
 # ── 큐텐 소포수령증 시트 ────────────────────────────────────────
 
-def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
+def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float, submitter: dict = None):
     """
     큐텐(소포수령증) 시트
     jpy_rate: 거래기간 마지막날 JPY 환율 (100엔 기준)
@@ -465,10 +480,11 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
     ws['A3'] = '1.제출자 인적사항'
     _style(ws['A3'], font=FONT_BOLD)
 
-    ws['A5'] = '사업자등록번호'; ws['B5'] = '529-12-02268'
-    ws['C5'] = '상호（법인명）'; ws['D5'] = '유엠'
-    ws['A6'] = '성명 （대표자）'; ws['B6'] = '맹진열'
-    ws['C6'] = '사업장소재지'; ws['D6'] = '서울특별시 광진구 광나루로 556 씨앤씨빌딩 202호 UM'
+    sub = submitter or DEFAULT_SUBMITTER
+    ws['A5'] = '사업자등록번호'; ws['B5'] = sub.get('biz_no', '')
+    ws['C5'] = '상호（법인명）'; ws['D5'] = sub.get('name', '')
+    ws['A6'] = '성명 （대표자）'; ws['B6'] = sub.get('ceo', '')
+    ws['C6'] = '사업장소재지'; ws['D6'] = sub.get('address', '')
     ws['A7'] = '거래기간'
 
     if qoo10_data:
@@ -530,7 +546,8 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
             ws.cell(row=r, column=7, value=e_amt)
             ws.cell(row=r, column=8, value=e_krw)
             for col in range(1, 9):
-                _style(ws.cell(row=r, column=col), font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER)
+                nf = NUM_FMT if col in (7, 8) else None
+                _style(ws.cell(row=r, column=col), font=FONT_DEFAULT, align=CENTER, border=THIN_BORDER, num_format=nf)
             total_jpy += e_amt
             total_krw += e_krw
             total_qty += e_qty
@@ -541,7 +558,8 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
         ws.cell(row=r, column=7, value=total_jpy)
         ws.cell(row=r, column=8, value=total_krw)
         for col in range(1, 9):
-            _style(ws.cell(row=r, column=col), font=FONT_BOLD, align=CENTER, border=THIN_BORDER)
+            nf = NUM_FMT if col in (7, 8) else None
+            _style(ws.cell(row=r, column=col), font=FONT_BOLD, align=CENTER, border=THIN_BORDER, num_format=nf)
     else:
         ws['A12'] = '⚠️ 큐텐 데이터 없음 — STEP 2에서 수동 입력하세요'
         _style(ws['A12'], font=Font(name='맑은 고딕', size=9, color='FF0000'))
@@ -551,7 +569,7 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float):
 
 def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
                          qoo10_data: Optional[dict], jpy_rate: float,
-                         year_month: str):
+                         year_month: str, submitter: dict = None):
     """총집계 시트 작성 (B열부터 배치, 빈 행 제거)"""
     NUM  = '#,##0'        # 원화 (정수, 천단위)
     NUM2 = '#,##0.00'     # 외화 (소수 2자리)
@@ -561,7 +579,8 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
     ws.column_dimensions['C'].width = 14
     ws.column_dimensions['D'].width = 16
 
-    ws['B1'] = '유엠(UM)(529-12-02268)'
+    sub = submitter or DEFAULT_SUBMITTER
+    ws['B1'] = f"{sub.get('name','')}({sub.get('biz_no','')})"
     _style(ws['B1'], font=FONT_TITLE)
     ws['D2'] = year_month  # 예: '2025년 12월'
     _style(ws['D2'], font=FONT_BOLD)
@@ -696,6 +715,17 @@ def generate_excel(
         qoo10_result['qty']       = sum(e.get('qty', 0) for e in q_entries)
         qoo10_result['total_krw'] = q_total_krw
 
+    # ── 제출자(판매자) 정보: PDF에서 자동 추출, 없으면 기본값 ──
+    report_submitter = None
+    for sd in shopee_results:
+        if sd.get('submitter') and sd['submitter'].get('name'):
+            report_submitter = sd['submitter']
+            break
+    if report_submitter is None and lazada_result and lazada_result.get('submitter', {}).get('name'):
+        report_submitter = lazada_result['submitter']
+    if report_submitter is None:
+        report_submitter = DEFAULT_SUBMITTER
+
     # ── 총집계 ──────────────────────────────────────────────
     ws_summary = wb.create_sheet('총집계')
     shopee_totals = {}
@@ -737,7 +767,7 @@ def generate_excel(
 
     write_summary_sheet(ws_summary, shopee_totals, lazada_totals,
                         qoo10_result, jpy_rate,
-                        f'{year}년 {month:02d}월')
+                        f'{year}년 {month:02d}월', submitter=report_submitter)
 
     # ── 통화별 수출신고 템플릿 (MYR, PHP, SGD, THB, TWD, VND) ──
     for cur in currency_list:
@@ -758,8 +788,8 @@ def generate_excel(
         _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
     if qoo10_result:
         ws_jpy.cell(row=1, column=5, value='큐텐')
-        ws_jpy.cell(row=1, column=6, value=qoo10_result.get('amount', 0))
-        ws_jpy.cell(row=1, column=7, value=qoo10_result.get('total_krw', 0))
+        ws_jpy.cell(row=1, column=6, value=qoo10_result.get('amount', 0)).number_format = NUM_FMT
+        ws_jpy.cell(row=1, column=7, value=qoo10_result.get('total_krw', 0)).number_format = NUM_FMT
         _jr = 5
         for e in qoo10_result.get('entries', []):
             wd = e.get('write_date', '') or qoo10_write_date
@@ -771,14 +801,14 @@ def generate_excel(
                     date_str = ''
             ws_jpy.cell(row=_jr, column=3, value=date_str or None)
             ws_jpy.cell(row=_jr, column=4, value='JPY')
-            ws_jpy.cell(row=_jr, column=5, value=e.get('rate', jpy_rate))
-            ws_jpy.cell(row=_jr, column=6, value=e.get('amount', 0))
-            ws_jpy.cell(row=_jr, column=7, value=e.get('krw', 0))
+            ws_jpy.cell(row=_jr, column=5, value=e.get('rate', jpy_rate)).number_format = NUM_FMT2
+            ws_jpy.cell(row=_jr, column=6, value=e.get('amount', 0)).number_format = NUM_FMT
+            ws_jpy.cell(row=_jr, column=7, value=e.get('krw', 0)).number_format = NUM_FMT
             _jr += 1
 
     # ── 큐텐(소포수령증) ──
     ws_q10 = wb.create_sheet('큐텐(소포수령증)')
-    write_qoo10_sheet(ws_q10, qoo10_result, jpy_rate)
+    write_qoo10_sheet(ws_q10, qoo10_result, jpy_rate, submitter=report_submitter)
 
     # ── 쇼피 국가별 시트 ──
     shopee_sheet_names = {
@@ -789,14 +819,14 @@ def generate_excel(
         ws = wb.create_sheet(sheet_name)
         sd = next((s for s in shopee_results if s.get('currency') == cur), None)
         if sd:
-            write_shopee_sheet(ws, sd, rates)
+            write_shopee_sheet(ws, sd, rates, submitter=report_submitter)
         else:
             ws['A1'] = f'{sheet_name} 데이터 없음'
 
     # ── 라자다(소포수령증) + 라자다(국가별) ──
     ws_laz = wb.create_sheet('라자다(소포수령증)')
     if lazada_result:
-        write_lazada_receipt_sheet(ws_laz, lazada_result, rates)
+        write_lazada_receipt_sheet(ws_laz, lazada_result, rates, submitter=report_submitter)
     else:
         ws_laz['A1'] = '라자다 데이터 없음'
 
