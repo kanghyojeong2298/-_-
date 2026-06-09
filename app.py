@@ -264,7 +264,7 @@ if rate_mode == AUTO_RATE_LABEL:
         st.markdown(
             '<div class="info-box">'
             '✅ <b>환율 자동 적용</b> — 환율을 수동으로 입력하지 않아도 됩니다.<br>'
-            '소포수령증 <b>발행일에 맞는 그날 환율</b>이 자동으로 적용됩니다.<br>'
+            '소포수령증 <b>발행일에 맞는 날짜의 환율</b>이 자동으로 적용됩니다.<br>'
             f'<small>내장 환율 기간: {_period}<br>적용 통화: {_curs}</small>'
             '</div>',
             unsafe_allow_html=True,
