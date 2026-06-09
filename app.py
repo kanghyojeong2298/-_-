@@ -183,7 +183,7 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
-_c_desc, _c_reset = st.columns([4, 1])
+_c_desc, _c_reset = st.columns([7, 1])
 _c_desc.caption("쇼피(MY/PH/SG/TH/TW/VN/BR/MX), 라자다 파일을 한꺼번에 올려주세요  \n*큐텐재팬은 STEP2에서 진행해주세요")
 if _c_reset.button("🔄 초기화"):
     st.session_state.uploader_key += 1
