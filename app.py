@@ -222,22 +222,41 @@ with _cps:
 with _cpe:
     qoo10_period_end = st.text_input("거래기간 종료일", placeholder="예: 2025-12-31")
 
-st.caption("아래 표에 **건별로** 입력하세요. 맨 아래 빈 줄에 입력하면 행이 추가됩니다. (발행일이 환율 기준일)")
-_qoo10_default = pd.DataFrame(
-    [{"발송번호": "", "건수": 0, "금액(JPY)": 0, "발행일": ""}]
-)
-qoo10_editor = st.data_editor(
-    _qoo10_default,
-    num_rows="dynamic",
-    use_container_width=True,
-    key="qoo10_table",
-    column_config={
-        "발송번호":  st.column_config.TextColumn("발송번호", help="예: K2512244647017"),
-        "건수":     st.column_config.NumberColumn("건수", min_value=0, step=1, format="%d"),
-        "금액(JPY)": st.column_config.NumberColumn("금액(JPY)", min_value=0, step=1, format="%d"),
-        "발행일":   st.column_config.TextColumn("발행일", help="예: 2026-01-05 (환율 기준일)"),
-    },
-)
+if "qoo10_entries" not in st.session_state:
+    st.session_state.qoo10_entries = []
+
+st.caption("한 건씩 입력하고 **➕ 추가**를 누르면 아래 표에 정리됩니다. (발행일이 환율 기준일)")
+with st.form("qoo10_add_form", clear_on_submit=True):
+    _fc1, _fc2, _fc3, _fc4 = st.columns(4)
+    _in_amount = _fc1.number_input("금액(JPY)", min_value=0, value=0, format="%d")
+    _in_qty    = _fc2.number_input("건수", min_value=0, value=0, format="%d")
+    _in_track  = _fc3.text_input("발송번호", placeholder="예: K2512244647017")
+    _in_wdate  = _fc4.text_input("발행일", placeholder="예: 2026-01-05")
+    _added = st.form_submit_button("➕ 추가", use_container_width=True)
+
+if _added:
+    if _in_amount > 0 or _in_qty > 0 or _in_track.strip():
+        st.session_state.qoo10_entries.append({
+            "발송번호":  _in_track.strip(),
+            "건수":     int(_in_qty),
+            "금액(JPY)": float(_in_amount),
+            "발행일":   _in_wdate.strip(),
+        })
+    else:
+        st.warning("금액·건수·발송번호 중 하나는 입력해야 합니다.")
+
+if st.session_state.qoo10_entries:
+    _df_show = pd.DataFrame(st.session_state.qoo10_entries)
+    _df_show.index = range(1, len(_df_show) + 1)
+    st.table(_df_show)
+    _tot_amt = sum(e["금액(JPY)"] for e in st.session_state.qoo10_entries)
+    _tot_qty = sum(e["건수"] for e in st.session_state.qoo10_entries)
+    st.caption(f"합계: {len(st.session_state.qoo10_entries)}건 / 수량 {int(_tot_qty):,} / 금액 {int(_tot_amt):,} JPY")
+    if st.button("🗑️ 전체 삭제"):
+        st.session_state.qoo10_entries = []
+        st.rerun()
+else:
+    st.caption("아직 추가된 건이 없습니다.")
 
 st.divider()
 
@@ -551,21 +570,18 @@ if process_btn and uploaded_files:
                         f"[{result.get('period_start','')}~{result.get('period_end','')}]"
                     )
 
-            # ── 큐텐 수동 입력 적용 (표: 건별) ──
+            # ── 큐텐 수동 입력 적용 (추가된 표) ──
             qoo10_entries = []
-            try:
-                for _, _row in qoo10_editor.iterrows():
-                    _amt = float(_row.get("금액(JPY)", 0) or 0)
-                    _qty = int(_row.get("건수", 0) or 0)
-                    _trk = str(_row.get("발송번호", "") or "").strip()
-                    _wdt = str(_row.get("발행일", "") or "").strip()
-                    if _amt > 0 or _qty > 0 or _trk:
-                        qoo10_entries.append({
-                            "tracking_no": _trk, "qty": _qty,
-                            "amount": _amt, "write_date": _wdt,
-                        })
-            except Exception:
-                qoo10_entries = []
+            for _row in st.session_state.get("qoo10_entries", []):
+                _amt = float(_row.get("금액(JPY)", 0) or 0)
+                _qty = int(_row.get("건수", 0) or 0)
+                _trk = str(_row.get("발송번호", "") or "").strip()
+                _wdt = str(_row.get("발행일", "") or "").strip()
+                if _amt > 0 or _qty > 0 or _trk:
+                    qoo10_entries.append({
+                        "tracking_no": _trk, "qty": _qty,
+                        "amount": _amt, "write_date": _wdt,
+                    })
 
             if qoo10_entries:
                 _total_amt = sum(e["amount"] for e in qoo10_entries)
