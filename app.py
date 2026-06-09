@@ -180,7 +180,7 @@ st.divider()
 # STEP 1 — PDF 업로드
 # ══════════════════════════════════════════════════════════════════
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
-st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다 파일을 한꺼번에 올려주세요. *큐텐재팬은 STEP 2에서 진행해주세요.")
+st.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다, 큐텐재팬 파일을 한꺼번에 올려주세요")
 
 uploaded_files = st.file_uploader(
     "PDF 파일 선택 (여러 개 동시 선택 가능)",
@@ -214,23 +214,30 @@ st.markdown(
 )
 st.write("")
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    qoo10_amount = st.number_input("JPY 합계 금액", min_value=0, value=0, format="%d",
-                                    help="예: 3802685")
-with col2:
-    qoo10_qty = st.number_input("발송 건수", min_value=0, value=0, help="예: 386")
-with col3:
-    qoo10_tracking = st.text_input("발송번호", placeholder="예: K2512244647017 외")
+import pandas as pd
 
-col4, col5, col6 = st.columns(3)
-with col4:
+_cps, _cpe = st.columns(2)
+with _cps:
     qoo10_period_start = st.text_input("거래기간 시작일", placeholder="예: 2025-12-01")
-with col5:
+with _cpe:
     qoo10_period_end = st.text_input("거래기간 종료일", placeholder="예: 2025-12-31")
-with col6:
-    qoo10_write_date_input = st.text_input("발행일 (작성일자)", placeholder="예: 2026-01-05",
-                                            help="소포수령증에 기재된 작성일자. 환율 기준일로 사용됩니다.")
+
+st.caption("아래 표에 **건별로** 입력하세요. 맨 아래 빈 줄에 입력하면 행이 추가됩니다. (발행일이 환율 기준일)")
+_qoo10_default = pd.DataFrame(
+    [{"발송번호": "", "건수": 0, "금액(JPY)": 0, "발행일": ""}]
+)
+qoo10_editor = st.data_editor(
+    _qoo10_default,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="qoo10_table",
+    column_config={
+        "발송번호":  st.column_config.TextColumn("발송번호", help="예: K2512244647017"),
+        "건수":     st.column_config.NumberColumn("건수", min_value=0, step=1, format="%d"),
+        "금액(JPY)": st.column_config.NumberColumn("금액(JPY)", min_value=0, step=1, format="%d"),
+        "발행일":   st.column_config.TextColumn("발행일", help="예: 2026-01-05 (환율 기준일)"),
+    },
+)
 
 st.divider()
 
@@ -263,8 +270,8 @@ if rate_mode == AUTO_RATE_LABEL:
         _period  = next(iter(_fr.values())).get('period', '')
         st.markdown(
             '<div class="info-box">'
-            '✅ <b>환율 자동 적용</b> — 환율을 수동으로 입력하지 않아도 됩니다.<br>'
-            '소포수령증 <b>발행일에 맞는 날짜의 환율</b>이 자동으로 적용됩니다.<br>'
+            '✅ <b>환율 자동 적용</b> — 직원은 환율을 입력할 필요가 없습니다.<br>'
+            '소포수령증 <b>발행일에 맞는 그날 환율</b>이 자동으로 적용됩니다.<br>'
             f'<small>내장 환율 기간: {_period}<br>적용 통화: {_curs}</small>'
             '</div>',
             unsafe_allow_html=True,
@@ -544,28 +551,40 @@ if process_btn and uploaded_files:
                         f"[{result.get('period_start','')}~{result.get('period_end','')}]"
                     )
 
-            # ── 큐텐 수동 입력 적용 ──
-            if qoo10_amount > 0:
+            # ── 큐텐 수동 입력 적용 (표: 건별) ──
+            qoo10_entries = []
+            try:
+                for _, _row in qoo10_editor.iterrows():
+                    _amt = float(_row.get("금액(JPY)", 0) or 0)
+                    _qty = int(_row.get("건수", 0) or 0)
+                    _trk = str(_row.get("발송번호", "") or "").strip()
+                    _wdt = str(_row.get("발행일", "") or "").strip()
+                    if _amt > 0 or _qty > 0 or _trk:
+                        qoo10_entries.append({
+                            "tracking_no": _trk, "qty": _qty,
+                            "amount": _amt, "write_date": _wdt,
+                        })
+            except Exception:
+                qoo10_entries = []
+
+            if qoo10_entries:
+                _total_amt = sum(e["amount"] for e in qoo10_entries)
+                _total_qty = sum(e["qty"] for e in qoo10_entries)
+                _first_wd  = next((e["write_date"] for e in qoo10_entries if e["write_date"]), "")
                 base = qoo10_result or {
                     "type": "qoo10", "carrier": "국제로지스틱",
                     "destination": "JP", "currency": "JPY",
-                    "period_start": qoo10_period_start,
-                    "period_end":   qoo10_period_end,
-                    "write_date":   qoo10_write_date_input,
-                    "tracking_no":  "",
                 }
-                base['amount']       = float(qoo10_amount)
-                base['qty']          = int(qoo10_qty) if qoo10_qty > 0 else base.get('qty', 0)
-                base['tracking_no']  = qoo10_tracking or base.get('tracking_no', '')
                 base['period_start'] = qoo10_period_start or base.get('period_start', '')
                 base['period_end']   = qoo10_period_end   or base.get('period_end', '')
-                # 발행일: 수동 입력 우선, 그 다음 OCR 결과
-                base['write_date']   = qoo10_write_date_input or base.get('write_date', '')
+                base['write_date']   = _first_wd or base.get('write_date', '')
+                base['tracking_no']  = qoo10_entries[0]["tracking_no"]
+                base['amount']       = _total_amt
+                base['qty']          = _total_qty
+                base['entries']      = qoo10_entries
                 qoo10_result = base
-                wd_display = base['write_date'] or '미입력'
                 parse_log.append(
-                    f"📝 큐텐 수동 입력 적용 — {int(qoo10_qty):,}건 / {int(qoo10_amount):,} JPY "
-                    f"(발행일: {wd_display})"
+                    f"📝 큐텐 수동 입력 — {len(qoo10_entries)}건 입력 / 합계 {_total_qty:,}건 / {int(_total_amt):,} JPY"
                 )
 
             # 파싱 결과 표시
