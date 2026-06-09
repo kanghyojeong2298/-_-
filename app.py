@@ -263,7 +263,7 @@ if rate_mode == AUTO_RATE_LABEL:
         _period  = next(iter(_fr.values())).get('period', '')
         st.markdown(
             '<div class="info-box">'
-            '✅ <b>환율 자동 적용</b> — 직원은 환율을 입력할 필요가 없습니다.<br>'
+            '✅ <b>환율 자동 적용</b> — 사용자는 환율을 입력할 필요가 없습니다.<br>'
             '소포수령증 <b>발행일에 맞는 그날 환율</b>이 자동으로 적용됩니다.<br>'
             f'<small>내장 환율 기간: {_period}<br>적용 통화: {_curs}</small>'
             '</div>',
