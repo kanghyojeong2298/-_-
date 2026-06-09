@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from modules.pdf_parser   import parse_pdf, detect_pdf_type
 from modules.excel_writer import generate_excel
 
-CURRENCIES = ["MYR", "PHP", "SGD", "THB", "TWD", "VND", "JPY"]
+CURRENCIES = ["MYR", "PHP", "SGD", "THB", "TWD", "VND", "JPY", "BRL", "MXN"]
 
 CURRENCY_NAMES = {
     "MYR": "말레이시아 링깃 (MYR)", "PHP": "필리핀 페소 (PHP)",
@@ -184,7 +184,7 @@ if "uploader_key" not in st.session_state:
 
 st.markdown("### 📄 STEP 1 — 소포수령증 PDF 업로드")
 _c_desc, _c_reset = st.columns([4, 1])
-_c_desc.caption("쇼피(MY/PH/SG/TH/TW/VN), 라자다 파일을 한꺼번에 올려주세요  \n*큐텐재팬은 STEP2에서 진행해주세요")
+_c_desc.caption("쇼피(MY/PH/SG/TH/TW/VN/BR/MX), 라자다 파일을 한꺼번에 올려주세요  \n*큐텐재팬은 STEP2에서 진행해주세요")
 if _c_reset.button("🔄 초기화"):
     st.session_state.uploader_key += 1
     st.session_state.qoo10_entries = []
