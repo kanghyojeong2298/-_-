@@ -570,11 +570,9 @@ def write_qoo10_sheet(ws, qoo10_data: Optional[dict], jpy_rate: float, submitter
 def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
                          qoo10_data: Optional[dict], jpy_rate: float,
                          year_month: str, submitter: dict = None):
-    """총집계 시트 작성 (B열부터 배치, 빈 행 제거)"""
-    NUM  = '#,##0'        # 원화 (정수, 천단위)
-    NUM2 = '#,##0.00'     # 외화 (소수 2자리)
-
-    # 열 너비 — 숫자가 지수표기로 깨지지 않도록 충분히
+    """총집계 시트 작성 (B열부터, 통화 개수에 맞춰 자동 배치)"""
+    NUM  = '#,##0'
+    NUM2 = '#,##0.00'
     ws.column_dimensions['B'].width = 16
     ws.column_dimensions['C'].width = 14
     ws.column_dimensions['D'].width = 16
@@ -582,12 +580,17 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
     sub = submitter or DEFAULT_SUBMITTER
     ws['B1'] = f"{sub.get('name','')}({sub.get('biz_no','')})"
     _style(ws['B1'], font=FONT_TITLE)
-    ws['D2'] = year_month  # 예: '2025년 12월'
+    ws['D2'] = year_month
     _style(ws['D2'], font=FONT_BOLD)
 
-    def _hdr(col, row, val):
-        c = ws.cell(row=row, column=col, value=val)
-        _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
+    def _sub(r, label):
+        c = ws.cell(row=r, column=2, value=label)
+        _style(c, font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
+
+    def _hdr3(r, h1, h2, h3):
+        for col, val in [(2, h1), (3, h2), (4, h3)]:
+            c = ws.cell(row=r, column=col, value=val)
+            _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
     def _datarow(r, name, fx, krw):
         ws.cell(row=r, column=2, value=name)
@@ -608,48 +611,50 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
         'MYR': '말레이시아(MYR)', 'PHP': '필리핀(PHP)',
         'SGD': '싱가폴(SGD)', 'THB': '태국(THB)',
         'TWD': '대만(TWD)', 'VND': '베트남(VND)',
+        'BRL': '브라질(BRL)', 'MXN': '멕시코(MXN)',
     }
 
-    # 쇼피 (제목 B5, 헤더 6행, 데이터 7~12, 총합 13)
-    ws['B5'] = '쇼피'
-    _style(ws['B5'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr(2, 6, '국가'); _hdr(3, 6, '외화'); _hdr(4, 6, '원화')
+    # 쇼피 (제목 5행, 헤더 6행, 데이터 7행~)
+    _sub(5, '쇼피')
+    _hdr3(6, '국가', '외화', '원화')
+    r = 7
     shopee_total_krw = 0
-    for r, (cur, name) in enumerate(COUNTRY_NAMES.items(), 7):
+    for cur, name in COUNTRY_NAMES.items():
         data = shopee_totals.get(cur, {})
-        fx  = data.get('fx', 0.0)
-        krw = data.get('krw', 0)
+        fx = data.get('fx', 0.0); krw = data.get('krw', 0)
         shopee_total_krw += krw
         _datarow(r, name, fx, krw)
-    _totalrow(13, shopee_total_krw)
+        r += 1
+    _totalrow(r, shopee_total_krw)
 
-    # 라자다 (제목 B15, 헤더 16행, 데이터 17~20, 총합 21)
-    ws['B15'] = '라자다'
-    _style(ws['B15'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr(2, 16, '국가'); _hdr(3, 16, '외화'); _hdr(4, 16, '원화')
+    # 라자다
+    rr = r + 2
+    _sub(rr, '라자다')
+    _hdr3(rr + 1, '국가', '외화', '원화')
+    dr = rr + 2
     lazada_total_krw = 0
-    LAZADA_COUNTRIES = ['MYR', 'PHP', 'SGD', 'VND']
-    for r, cur in enumerate(LAZADA_COUNTRIES, 17):
+    for cur in ['MYR', 'PHP', 'SGD', 'VND']:
         data = lazada_totals.get(cur, {})
-        fx  = data.get('fx', 0.0)
-        krw = data.get('krw', 0)
+        fx = data.get('fx', 0.0); krw = data.get('krw', 0)
         lazada_total_krw += krw
-        _datarow(r, COUNTRY_NAMES.get(cur, cur), fx, krw)
-    _totalrow(21, lazada_total_krw)
+        _datarow(dr, COUNTRY_NAMES.get(cur, cur), fx, krw)
+        dr += 1
+    _totalrow(dr, lazada_total_krw)
 
-    # 큐텐 (제목 B23, 헤더 24행, 데이터 25)
-    ws['B23'] = '큐텐'
-    _style(ws['B23'], font=FONT_BOLD, fill=SUBHEAD_FILL, align=CENTER)
-    _hdr(2, 24, '외화'); _hdr(3, 24, '평균환율'); _hdr(4, 24, '원화')
+    # 큐텐
+    qt = dr + 2
+    _sub(qt, '큐텐')
+    _hdr3(qt + 1, '외화', '평균환율', '원화')
     if qoo10_data:
         jpy_amount = qoo10_data.get('amount', 0)
         krw = qoo10_data.get('total_krw') or round(jpy_amount * jpy_rate / 100)
-        ws.cell(row=25, column=2, value=jpy_amount)
-        ws.cell(row=25, column=3, value=jpy_rate)
-        ws.cell(row=25, column=4, value=krw)
-        _style(ws.cell(row=25, column=2), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
-        _style(ws.cell(row=25, column=3), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
-        _style(ws.cell(row=25, column=4), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        qd = qt + 2
+        ws.cell(row=qd, column=2, value=jpy_amount)
+        ws.cell(row=qd, column=3, value=jpy_rate)
+        ws.cell(row=qd, column=4, value=krw)
+        _style(ws.cell(row=qd, column=2), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
+        _style(ws.cell(row=qd, column=3), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
+        _style(ws.cell(row=qd, column=4), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
 
 
 # ── 전체 엑셀 생성 ───────────────────────────────────────────────
@@ -667,7 +672,7 @@ def generate_excel(
     wb = Workbook()
     wb.remove(wb.active)
 
-    currency_list = ['MYR', 'PHP', 'SGD', 'THB', 'TWD', 'VND']
+    currency_list = ['MYR', 'PHP', 'SGD', 'THB', 'TWD', 'VND', 'BRL', 'MXN']
 
     # ── 라자다 발행일 추출 (write_date → period_end fallback) ──
     if lazada_result:
@@ -814,6 +819,7 @@ def generate_excel(
     shopee_sheet_names = {
         'MYR': '쇼피(MYR)', 'PHP': '쇼피(PHP)', 'SGD': '쇼피(SGD)',
         'THB': '쇼피(THB)', 'TWD': '쇼피(TWD)', 'VND': '쇼피(VND)',
+        'BRL': '쇼피(BRL)', 'MXN': '쇼피(MXN)',
     }
     for cur, sheet_name in shopee_sheet_names.items():
         ws = wb.create_sheet(sheet_name)
@@ -841,7 +847,7 @@ def generate_excel(
                     _style(c, font=FONT_BOLD, fill=HEADER_FILL, align=CENTER, border=THIN_BORDER)
 
     # ── 환율 시트 ──
-    all_currencies = ['JPY', 'TWD', 'THB', 'SGD', 'MYR', 'PHP', 'VND', 'BRL']
+    all_currencies = ['JPY', 'TWD', 'THB', 'SGD', 'MYR', 'PHP', 'VND', 'BRL', 'MXN', 'USD', 'EUR', 'GBP', 'CNY']
     for cur in all_currencies:
         ws = wb.create_sheet(f'환율({cur})')
         write_exchange_rate_sheet(ws, rates.get(cur))

@@ -15,6 +15,7 @@ from typing import Optional
 COUNTRY_TO_CURRENCY = {
     'MY': 'MYR', 'PH': 'PHP', 'SG': 'SGD',
     'TH': 'THB', 'TW': 'TWD', 'VN': 'VND', 'JP': 'JPY',
+    'BR': 'BRL', 'MX': 'MXN',
 }
 
 CURRENCY_NAMES_KR = {
@@ -31,6 +32,7 @@ CURRENCY_NAMES_KR = {
 SHOPEE_FILE_PATTERNS = {
     '_MY_': 'MY', '_PH_': 'PH', '_SG_': 'SG',
     '_TH_': 'TH', '_TW_': 'TW', '_VN_': 'VN',
+    '_BR_': 'BR', '_MX_': 'MX',
 }
 
 
@@ -43,7 +45,7 @@ def detect_pdf_type(pdf_path: str) -> str:
     if '큐텐' in name or 'qoo10' in lower:
         return 'qoo10'
     # 쇼피: 업체명과 무관하게 파일명의 국가코드 패턴(_MY_, _TW_ 등)으로 인식
-    if re.search(r'_(MY|PH|SG|TH|TW|VN|BR|JP)_', name):
+    if re.search(r'_(MY|PH|SG|TH|TW|VN|BR|MX|JP)_', name):
         return 'shopee'
     # 기존 호환: 유엠 키워드
     if '유엠(UM)_' in name or '유엠_' in name:
