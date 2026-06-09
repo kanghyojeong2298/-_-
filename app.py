@@ -234,11 +234,18 @@ st.write("")
 
 import pandas as pd
 
+def _fmt_date(v: str) -> str:
+    """8자리 숫자(20251201)면 2025-12-01로 자동 변환. 그 외는 그대로."""
+    d = re.sub(r'\D', '', str(v or ''))
+    if len(d) == 8:
+        return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+    return str(v or '').strip()
+
 _cps, _cpe = st.columns(2)
 with _cps:
-    qoo10_period_start = st.text_input("거래기간 시작일", placeholder="예: 2025-12-01")
+    qoo10_period_start = _fmt_date(st.text_input("거래기간 시작일", placeholder="예: 20251201 (하이픈 자동)"))
 with _cpe:
-    qoo10_period_end = st.text_input("거래기간 종료일", placeholder="예: 2025-12-31")
+    qoo10_period_end = _fmt_date(st.text_input("거래기간 종료일", placeholder="예: 20251231 (하이픈 자동)"))
 
 if "qoo10_entries" not in st.session_state:
     st.session_state.qoo10_entries = []
@@ -249,7 +256,7 @@ with st.form("qoo10_add_form", clear_on_submit=True):
     _in_amount = _fc1.number_input("금액(JPY)", min_value=0, value=0, format="%d")
     _in_qty    = _fc2.number_input("건수", min_value=0, value=0, format="%d")
     _in_track  = _fc3.text_input("발송번호", placeholder="예: K2512244647017")
-    _in_wdate  = _fc4.text_input("발행일", placeholder="예: 2026-01-05")
+    _in_wdate  = _fc4.text_input("발행일", placeholder="예: 20260105 (하이픈 자동)")
     _added = st.form_submit_button("➕ 추가", use_container_width=True)
 
 if _added:
@@ -258,7 +265,7 @@ if _added:
             "발송번호":  _in_track.strip(),
             "건수":     int(_in_qty),
             "금액(JPY)": float(_in_amount),
-            "발행일":   _in_wdate.strip(),
+            "발행일":   _fmt_date(_in_wdate),
         })
     else:
         st.warning("금액·건수·발송번호 중 하나는 입력해야 합니다.")
@@ -266,6 +273,8 @@ if _added:
 if st.session_state.qoo10_entries:
     _df_show = pd.DataFrame(st.session_state.qoo10_entries)
     _df_show.index = range(1, len(_df_show) + 1)
+    _df_show["금액(JPY)"] = _df_show["금액(JPY)"].map(lambda x: f"{int(x):,}")
+    _df_show["건수"] = _df_show["건수"].map(lambda x: f"{int(x):,}")
     st.table(_df_show)
     _tot_amt = sum(e["금액(JPY)"] for e in st.session_state.qoo10_entries)
     _tot_qty = sum(e["건수"] for e in st.session_state.qoo10_entries)
