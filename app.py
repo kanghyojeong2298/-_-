@@ -8,6 +8,16 @@ import tempfile
 import os
 import sys
 import re
+import importlib.util
+import importlib.metadata as md
+
+st.write("Streamlit version:", st.__version__)
+st.write("authlib found:", importlib.util.find_spec("authlib"))
+
+try:
+    st.write("Authlib version:", md.version("Authlib"))
+except Exception as e:
+    st.write("Authlib version check failed:", e)
 
 # ── 허용된 직원 이메일 목록 (배포 후 여기에 직원 이메일 추가) ──────────────
 ALLOWED_EMAILS = [
