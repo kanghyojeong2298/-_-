@@ -110,6 +110,7 @@ st.set_page_config(page_title="소포수령증 자동화", page_icon="📦", lay
 
 # ── 로그인 (Streamlit 네이티브 인증 — Secrets의 [auth] 사용) ──────
 # Secrets에 [auth] 섹션이 없으면(로컬 등) 인증 없이 실행됩니다.
+# ── 로그인 (Streamlit 네이티브 인증 — Secrets의 [auth] 사용) ──────
 _AUTH_ENABLED = False
 try:
     _AUTH_ENABLED = 'auth' in st.secrets
@@ -117,8 +118,11 @@ except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
-    _logged_in = bool(getattr(st, 'user', None)) and st.user.is_logged_in
-    if not _logged_in:
+    st.sidebar.write("AUTH ENABLED:", _AUTH_ENABLED)
+    st.sidebar.write("USER:", dict(st.user))
+    st.sidebar.write("IS LOGGED IN:", st.user.is_logged_in)
+
+    if not st.user.is_logged_in:
         st.markdown(
             """
             <div style="text-align:center; padding:3rem 1rem;">
@@ -132,13 +136,13 @@ if _AUTH_ENABLED:
             st.login("google")
         st.stop()
 
-    _user_email = (st.user.email or '') if hasattr(st.user, 'email') else ''
+    _user_email = st.user.get("email", "")
+
     if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
         st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
         if st.button("로그아웃"):
             st.logout()
         st.stop()
-
     with st.sidebar:
         try:
             _user_name = st.user.get('name') or _user_email
