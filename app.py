@@ -119,8 +119,8 @@ if _AUTH_ENABLED:
     try:
         _logged_in = st.user.is_logged_in
     except Exception as e:
-    st.error(f"로그인 상태 확인 오류: {type(e).__name__}: {e}")
-    st.stop()
+        st.error(f"로그인 상태 확인 오류: {type(e).__name__}: {e}")
+        st.stop()
 
     if not _logged_in:
         st.markdown(
