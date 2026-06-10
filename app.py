@@ -11,14 +11,15 @@ import re
 
 # ── 허용된 직원 이메일 목록 (배포 후 여기에 직원 이메일 추가) ──────────────
 ALLOWED_EMAILS = [
-    "m0311@taxexpert.kr",
-    "m1007@taxexpert.kr",
+    "guwjd2298@gmail.com",
+    "help@taxexpert.kr",
+    "m0120@taxexpert.kr",
+    "m0227@taxexpert.kr",
+    "m0429@taxexpert.kr",
     "m0607@taxexpert.kr",
-    "m1225@taxexpert.kr",
-    "m1024@taxexpert.kr",
+    "m1007@taxexpert.kr",
     "m1211@taxexpert.kr",
-    "m0127@taxexpert.kr",
-    "m0224@taxexpert.kr",
+    "m1225@taxexpert.kr",
     "m1018@taxexpert.kr",  # 관리자
 ]
 import calendar
