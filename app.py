@@ -119,9 +119,10 @@ except Exception:
 
 if _AUTH_ENABLED:
     st.sidebar.write("AUTH ENABLED:", _AUTH_ENABLED)
-    st.sidebar.write("USER:", dict(st.user))
     st.sidebar.write("IS LOGGED IN:", st.user.is_logged_in)
-
+    st.sidebar.write("EMAIL:", st.user.get("email", ""))
+    st.sidebar.write("NAME:", st.user.get("name", ""))
+     
     if not st.user.is_logged_in:
         st.markdown(
             """
