@@ -116,6 +116,11 @@ except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
+    try:
+        _logged_in = st.user.is_logged_in
+    except Exception:
+        _logged_in = False
+
     if not _logged_in:
         st.markdown(
             """
@@ -131,6 +136,7 @@ if _AUTH_ENABLED:
         st.stop()
 
     _user_email = st.user.get("email", "")
+
     if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
         st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
         if st.button("로그아웃"):
