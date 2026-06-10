@@ -116,18 +116,6 @@ except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
-    _st_user = getattr(st, "user", None)
-
-    if _st_user is None:
-        st.error("현재 Streamlit에서 st.user를 사용할 수 없습니다.")
-        st.stop()
-
-    _logged_in = bool(getattr(_st_user, "is_logged_in", False))
-
-    st.sidebar.write("AUTH ENABLED:", _AUTH_ENABLED)
-    st.sidebar.write("IS LOGGED IN:", _logged_in)
-    st.sidebar.write("EMAIL:", _st_user.get("email", ""))
-
     if not _logged_in:
         st.markdown(
             """
@@ -142,7 +130,7 @@ if _AUTH_ENABLED:
             st.login("google")
         st.stop()
 
-    _user_email = _st_user.get("email", "")
+    _user_email = st.user.get("email", "")
     if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
         st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
         if st.button("로그아웃"):
@@ -150,7 +138,7 @@ if _AUTH_ENABLED:
         st.stop()
 
     with st.sidebar:
-        _user_name = _st_user.get("name", "") or _user_email
+        _user_name = st.user.get("name", "") or _user_email
         st.markdown(f"**👤 {_user_name}**")
         st.markdown(f"<small>{_user_email}</small>", unsafe_allow_html=True)
         if st.button("로그아웃"):
