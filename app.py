@@ -108,72 +108,46 @@ def load_fixed_rates() -> dict:
 # ── 페이지 설정 ─────────────────────────────────────────────────
 st.set_page_config(page_title="소포수령증 자동화", page_icon="📦", layout="centered")
 
-# ── Google 로그인 (Streamlit Secrets에 google_credentials가 있으면 활성화) ──────
-# Secrets 미설정 시(로컬 등)에는 인증 없이 실행됩니다.
-import json as _json, tempfile as _tempfile
-
+# ── 로그인 (Streamlit 네이티브 인증 — Secrets의 [auth] 사용) ──────
+# Secrets에 [auth] 섹션이 없으면(로컬 등) 인증 없이 실행됩니다.
 _AUTH_ENABLED = False
-_creds_path = None
-_redirect_uri = 'http://localhost:8501'
-_cookie_secret = 'sopo-cookie-secret-2024'
 try:
-    if 'google_credentials' in st.secrets and 'web' in st.secrets['google_credentials']:
-        _web = dict(st.secrets['google_credentials']['web'])
-        _redir = _web.get('redirect_uris')
-        if isinstance(_redir, str):
-            _redir = [_redir]
-            _web['redirect_uris'] = _redir
-        elif _redir is not None:
-            _redir = list(_redir)
-            _web['redirect_uris'] = _redir
-        _redirect_uri = (_redir[0] if _redir else _redirect_uri)
-        _cookie_secret = st.secrets.get('app_auth', {}).get('cookie_secret', _cookie_secret)
-        _creds_path = os.path.join(_tempfile.gettempdir(), 'google_credentials.json')
-        with open(_creds_path, 'w', encoding='utf-8') as _f:
-            _json.dump({'web': _web}, _f)
-        _AUTH_ENABLED = True
+    _AUTH_ENABLED = 'auth' in st.secrets
 except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
-    try:
-        from streamlit_google_auth import Authenticate as _GoogleAuth
-        _authenticator = _GoogleAuth(
-            secret_credentials_path=_creds_path,
-            cookie_name='soposuryjungjeung_auth',
-            cookie_key=_cookie_secret,
-            redirect_uri=_redirect_uri,
-        )
-        _authenticator.check_authentification()
-
-        if not st.session_state.get('connected'):
-            st.markdown("""
+    _logged_in = bool(getattr(st, 'user', None)) and st.user.is_logged_in
+    if not _logged_in:
+        st.markdown(
+            """
             <div style="text-align:center; padding:3rem 1rem;">
                 <p style="font-size:2rem; font-weight:700; color:#1f4e79;">📦 소포수령증 자동화</p>
-                <p style="color:#555; margin-bottom:2rem;">사용하려면 Google 계정으로 로그인하세요.</p>
+                <p style="color:#555; margin-bottom:1.5rem;">사용하려면 Google 계정으로 로그인하세요.</p>
             </div>
-            """, unsafe_allow_html=True)
-            _authenticator.login()
-            st.stop()
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("🔓 Google 계정으로 로그인", type="primary"):
+            st.login()
+        st.stop()
 
-        _user_email = st.session_state.get('email', '')
-        if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
-            st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
-            if st.button("로그아웃"):
-                _authenticator.logout()
-            st.stop()
+    _user_email = (st.user.email or '') if hasattr(st.user, 'email') else ''
+    if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
+        st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
+        if st.button("로그아웃"):
+            st.logout()
+        st.stop()
 
-        # 우상단 사용자 정보 표시
-        with st.sidebar:
-            _user_name = st.session_state.get('name', _user_email)
-            st.markdown(f"**👤 {_user_name}**")
-            st.markdown(f"<small>{_user_email}</small>", unsafe_allow_html=True)
-            if st.button("로그아웃"):
-                _authenticator.logout()
-                st.rerun()
-
-    except ImportError:
-        pass  # 로컬 환경: streamlit-google-auth 미설치 → 인증 없이 실행
+    with st.sidebar:
+        try:
+            _user_name = st.user.get('name') or _user_email
+        except Exception:
+            _user_name = _user_email
+        st.markdown(f"**👤 {_user_name}**")
+        st.markdown(f"<small>{_user_email}</small>", unsafe_allow_html=True)
+        if st.button("로그아웃"):
+            st.logout()
 
 st.markdown("""
 <style>
