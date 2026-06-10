@@ -241,17 +241,14 @@ def _fmt_date(v: str) -> str:
         return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
     return str(v or '').strip()
 
-_cps, _cpe = st.columns(2)
-with _cps:
-    qoo10_period_start = _fmt_date(st.text_input("거래기간 시작일", placeholder="예: 20251201 (하이픈 자동)"))
-with _cpe:
-    qoo10_period_end = _fmt_date(st.text_input("거래기간 종료일", placeholder="예: 20251231 (하이픈 자동)"))
-
 if "qoo10_entries" not in st.session_state:
     st.session_state.qoo10_entries = []
 
-st.caption("한 건씩 입력하고 **➕ 추가**를 누르면 아래 표에 정리됩니다. (발행일이 환율 기준일)")
+st.caption("한 건씩 입력하고 **➕ 추가**를 누르면 아래 표에 정리됩니다. 추가하면 입력칸(거래기간 포함)이 비워집니다. (발행일이 환율 기준일)")
 with st.form("qoo10_add_form", clear_on_submit=True):
+    _fp1, _fp2 = st.columns(2)
+    _in_ps = _fp1.text_input("거래기간 시작일", placeholder="예: 20251201 (하이픈 자동)")
+    _in_pe = _fp2.text_input("거래기간 종료일", placeholder="예: 20251231 (하이픈 자동)")
     _fc1, _fc2, _fc3, _fc4 = st.columns(4)
     _in_amount = _fc1.number_input("금액(JPY)", min_value=0, value=0, format="%d")
     _in_qty    = _fc2.number_input("건수", min_value=0, value=0, format="%d")
@@ -262,6 +259,8 @@ with st.form("qoo10_add_form", clear_on_submit=True):
 if _added:
     if _in_amount > 0 or _in_qty > 0 or _in_track.strip():
         st.session_state.qoo10_entries.append({
+            "거래기간 시작": _fmt_date(_in_ps),
+            "거래기간 종료": _fmt_date(_in_pe),
             "발송번호":  _in_track.strip(),
             "건수":     int(_in_qty),
             "금액(JPY)": float(_in_amount),
@@ -619,8 +618,10 @@ if process_btn and uploaded_files:
                     "type": "qoo10", "carrier": "국제로지스틱",
                     "destination": "JP", "currency": "JPY",
                 }
-                base['period_start'] = qoo10_period_start or base.get('period_start', '')
-                base['period_end']   = qoo10_period_end   or base.get('period_end', '')
+                _ps = [r.get("거래기간 시작", "") for r in st.session_state.get("qoo10_entries", []) if r.get("거래기간 시작")]
+                _pe = [r.get("거래기간 종료", "") for r in st.session_state.get("qoo10_entries", []) if r.get("거래기간 종료")]
+                base['period_start'] = (min(_ps) if _ps else '') or base.get('period_start', '')
+                base['period_end']   = (max(_pe) if _pe else '') or base.get('period_end', '')
                 base['write_date']   = _first_wd or base.get('write_date', '')
                 base['tracking_no']  = qoo10_entries[0]["tracking_no"]
                 base['amount']       = _total_amt
