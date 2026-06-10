@@ -8,6 +8,7 @@ URL: http://www.smbs.biz/ExRate/StdExRate.jsp
 import requests
 from bs4 import BeautifulSoup
 import re
+import bisect
 import calendar
 from typing import Optional
 from datetime import datetime, timedelta
@@ -209,20 +210,28 @@ def get_rate_for_date(rate_data: dict, date_str: str) -> float:
         d = date_norm.replace('.', '')
         date_norm = f"{d[:4]}.{d[4:6]}.{d[6:8]}"
 
-    # 정확히 일치하는 날짜 찾기
-    for d in daily:
-        if d['date'] == date_norm:
-            return d['rate']
+    # 날짜→환율 색인 캐시 (1회만 생성, 대량 거래 시 속도 향상)
+    idx = rate_data.get('_date_index')
+    if idx is None:
+        exact = {d['date']: d['rate'] for d in daily}
+        dates_sorted = sorted(exact.keys())
+        idx = {'exact': exact, 'dates': dates_sorted,
+               'rates': [exact[dt] for dt in dates_sorted]}
+        rate_data['_date_index'] = idx
 
-    # 없으면 가장 가까운 이전 영업일 환율 반환
-    sorted_daily = sorted(daily, key=lambda x: x['date'])
-    prev_rate = sorted_daily[0]['rate'] if sorted_daily else 0.0
-    for d in sorted_daily:
-        if d['date'] <= date_norm:
-            prev_rate = d['rate']
-        else:
-            break
-    return prev_rate
+    # 정확히 일치하는 날짜
+    if date_norm in idx['exact']:
+        return idx['exact'][date_norm]
+
+    # 없으면 가장 가까운 이전 영업일 환율 (이진탐색)
+    dates = idx['dates']
+    rates = idx['rates']
+    if not dates:
+        return 0.0
+    pos = bisect.bisect_right(dates, date_norm)
+    if pos == 0:
+        return rates[0]
+    return rates[pos - 1]
 
 
 def get_period_end_rate(rate_data: dict, period_end: str) -> float:

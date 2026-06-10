@@ -9,6 +9,7 @@ from openpyxl.styles import (
     Font, PatternFill, Alignment, Border, Side, numbers
 )
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.cell_range import CellRange
 from typing import Optional
 import re
 from pathlib import Path
@@ -63,10 +64,12 @@ _RECEIPT_GROUPS_3 = [(1, 3), (4, 6), (7, 10), (11, 12), (13, 15), (16, 17), (18,
 
 
 def _merge_row(ws, row, groups, border=None):
-    """한 행에서 각 열 그룹을 병합하고(2칸 이상), 그룹 전체에 테두리를 적용."""
+    """한 행에서 각 열 그룹을 병합하고(2칸 이상), 그룹 전체에 테두리를 적용.
+    겹침 검사 없는 빠른 병합(대량 행 처리 속도 향상, 결과는 동일)."""
     for c1, c2 in groups:
         if c2 > c1:
-            ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+            ws.merged_cells.ranges.add(
+                CellRange(min_col=c1, min_row=row, max_col=c2, max_row=row))
         if border is not None:
             for col in range(c1, c2 + 1):
                 ws.cell(row=row, column=col).border = border
