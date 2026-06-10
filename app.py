@@ -116,13 +116,22 @@ except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
-    # st.user.is_logged_in이 없을 때도 앱이 터지지 않게 처리
-    _logged_in = bool(getattr(st.user, "is_logged_in", False))
+    _st_user = getattr(st, "user", None)
 
-    # 확인용: 문제 해결 후 삭제 가능
+    # st.user 자체가 없으면 Streamlit 버전 문제일 가능성이 큼
+    if _st_user is None:
+        st.error(
+            "현재 설치된 Streamlit에서 st.user를 사용할 수 없습니다. "
+            "requirements.txt에서 streamlit 버전을 올린 뒤 재배포해 주세요."
+        )
+        st.stop()
+
+    _logged_in = bool(getattr(_st_user, "is_logged_in", False))
+
+    # 확인용: 로그인 안정화 후 삭제 가능
     st.sidebar.write("AUTH ENABLED:", _AUTH_ENABLED)
     st.sidebar.write("IS LOGGED IN:", _logged_in)
-    st.sidebar.write("EMAIL:", st.user.get("email", ""))
+    st.sidebar.write("EMAIL:", _st_user.get("email", ""))
 
     if not _logged_in:
         st.markdown(
@@ -138,7 +147,7 @@ if _AUTH_ENABLED:
             st.login("google")
         st.stop()
 
-    _user_email = st.user.get("email", "")
+    _user_email = _st_user.get("email", "")
 
     if ALLOWED_EMAILS and _user_email not in ALLOWED_EMAILS:
         st.error(f"❌ 접근 권한이 없습니다. ({_user_email})\n\n관리자에게 문의하세요.")
@@ -147,7 +156,7 @@ if _AUTH_ENABLED:
         st.stop()
 
     with st.sidebar:
-        _user_name = st.user.get("name", "") or _user_email
+        _user_name = _st_user.get("name", "") or _user_email
         st.markdown(f"**👤 {_user_name}**")
         st.markdown(f"<small>{_user_email}</small>", unsafe_allow_html=True)
         if st.button("로그아웃"):
