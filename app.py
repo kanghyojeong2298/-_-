@@ -107,24 +107,38 @@ def load_fixed_rates() -> dict:
 # ── 페이지 설정 ─────────────────────────────────────────────────
 st.set_page_config(page_title="소포수령증 자동화", page_icon="📦", layout="centered")
 
-# ── Google OAuth 인증 (google_credentials.json 파일이 있을 때만 활성화) ──────
-_CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), 'google_credentials.json')
-_AUTH_ENABLED = (
-    os.path.exists(_CREDENTIALS_FILE)
-    and '"client_id"' in open(_CREDENTIALS_FILE, encoding='utf-8').read()
-    and '여기에' not in open(_CREDENTIALS_FILE, encoding='utf-8').read()
-)
+# ── Google 로그인 (Streamlit Secrets에 google_credentials가 있으면 활성화) ──────
+# Secrets 미설정 시(로컬 등)에는 인증 없이 실행됩니다.
+import json as _json, tempfile as _tempfile
+
+_AUTH_ENABLED = False
+_creds_path = None
+_redirect_uri = 'http://localhost:8501'
+_cookie_secret = 'sopo-cookie-secret-2024'
+try:
+    if 'google_credentials' in st.secrets and 'web' in st.secrets['google_credentials']:
+        _web = dict(st.secrets['google_credentials']['web'])
+        _redir = _web.get('redirect_uris')
+        if isinstance(_redir, str):
+            _redir = [_redir]
+            _web['redirect_uris'] = _redir
+        elif _redir is not None:
+            _redir = list(_redir)
+            _web['redirect_uris'] = _redir
+        _redirect_uri = (_redir[0] if _redir else _redirect_uri)
+        _cookie_secret = st.secrets.get('app_auth', {}).get('cookie_secret', _cookie_secret)
+        _creds_path = os.path.join(_tempfile.gettempdir(), 'google_credentials.json')
+        with open(_creds_path, 'w', encoding='utf-8') as _f:
+            _json.dump({'web': _web}, _f)
+        _AUTH_ENABLED = True
+except Exception:
+    _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
     try:
         from streamlit_google_auth import Authenticate as _GoogleAuth
-        _redirect_uri = os.environ.get(
-            'REDIRECT_URI',
-            'http://localhost:8501'
-        )
-        _cookie_secret = os.environ.get('COOKIE_SECRET', 'sopo-cookie-secret-2024')
         _authenticator = _GoogleAuth(
-            secret_credentials_path=_CREDENTIALS_FILE,
+            secret_credentials_path=_creds_path,
             cookie_name='soposuryjungjeung_auth',
             cookie_key=_cookie_secret,
             redirect_uri=_redirect_uri,
