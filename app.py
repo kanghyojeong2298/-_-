@@ -132,8 +132,7 @@ if _AUTH_ENABLED:
             """,
             unsafe_allow_html=True,
         )
-        if st.button("🔓 Google 계정으로 로그인", type="primary"):
-            st.login()
+        st.button("🔓 Google 계정으로 로그인", type="primary", on_click=st.login)
         st.stop()
 
     _user_email = st.user.get("email", "")
