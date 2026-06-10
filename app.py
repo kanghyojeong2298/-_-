@@ -145,9 +145,9 @@ st.markdown("""
     /* 컬럼 안 작은 버튼(초기화 등): 글자 작게 + 줄바꿈 방지 */
     div[data-testid="stColumn"] .stButton > button,
     div[data-testid="column"]   .stButton > button {
-        font-size: 11px !important;
+        font-size: 13px !important;
         white-space: nowrap !important;
-        padding: 2px 8px !important;
+        padding: 4px 12px !important;
         min-height: 0 !important;
         line-height: 1.3 !important;
     }
@@ -155,7 +155,7 @@ st.markdown("""
     div[data-testid="column"]   .stButton > button p,
     div[data-testid="stColumn"] .stButton > button span,
     div[data-testid="column"]   .stButton > button span {
-        font-size: 11px !important;
+        font-size: 13px !important;
         white-space: nowrap !important;
     }
     /* 사이드바(회색 부분) 너비 축소 */
@@ -165,11 +165,12 @@ st.markdown("""
     }
     /* 사이드바 로그아웃 버튼: 오른쪽 정렬 + 작게 */
     section[data-testid="stSidebar"] .stButton {
-        text-align: right !important;
+        display: flex !important;
+        justify-content: flex-end !important;
     }
     section[data-testid="stSidebar"] .stButton > button {
-        font-size: 11px !important;
-        padding: 2px 10px !important;
+        font-size: 10px !important;
+        padding: 2px 8px !important;
         min-height: 0 !important;
         width: auto !important;
         white-space: nowrap !important;
