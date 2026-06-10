@@ -158,8 +158,8 @@ st.markdown("""
         font-size: 13px !important;
         white-space: nowrap !important;
     }
-    /* 사이드바(회색 부분) 너비 축소 */
-    section[data-testid="stSidebar"] {
+    /* 사이드바(회색 부분) 너비 축소 — 펼쳤을 때만 적용(접으면 본문 가운데 정렬) */
+    section[data-testid="stSidebar"][aria-expanded="true"] {
         width: 200px !important;
         min-width: 200px !important;
     }
