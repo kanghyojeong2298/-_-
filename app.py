@@ -109,21 +109,22 @@ def load_fixed_rates() -> dict:
 st.set_page_config(page_title="소포수령증 자동화", page_icon="📦", layout="centered")
 
 # ── 로그인 (Streamlit 네이티브 인증 — Secrets의 [auth] 사용) ──────
-# Secrets에 [auth] 섹션이 없으면(로컬 등) 인증 없이 실행됩니다.
-# ── 로그인 (Streamlit 네이티브 인증 — Secrets의 [auth] 사용) ──────
 _AUTH_ENABLED = False
 try:
-    _AUTH_ENABLED = 'auth' in st.secrets
+    _AUTH_ENABLED = "auth" in st.secrets
 except Exception:
     _AUTH_ENABLED = False
 
 if _AUTH_ENABLED:
+    # st.user.is_logged_in이 없을 때도 앱이 터지지 않게 처리
+    _logged_in = bool(getattr(st.user, "is_logged_in", False))
+
+    # 확인용: 문제 해결 후 삭제 가능
     st.sidebar.write("AUTH ENABLED:", _AUTH_ENABLED)
-    st.sidebar.write("IS LOGGED IN:", st.user.is_logged_in)
+    st.sidebar.write("IS LOGGED IN:", _logged_in)
     st.sidebar.write("EMAIL:", st.user.get("email", ""))
-    st.sidebar.write("NAME:", st.user.get("name", ""))
-     
-    if not st.user.is_logged_in:
+
+    if not _logged_in:
         st.markdown(
             """
             <div style="text-align:center; padding:3rem 1rem;">
@@ -144,16 +145,14 @@ if _AUTH_ENABLED:
         if st.button("로그아웃"):
             st.logout()
         st.stop()
+
     with st.sidebar:
-        try:
-            _user_name = st.user.get('name') or _user_email
-        except Exception:
-            _user_name = _user_email
+        _user_name = st.user.get("name", "") or _user_email
         st.markdown(f"**👤 {_user_name}**")
         st.markdown(f"<small>{_user_email}</small>", unsafe_allow_html=True)
         if st.button("로그아웃"):
             st.logout()
-
+            
 st.markdown("""
 <style>
     .main-title { font-size:2rem; font-weight:700; color:#1f4e79; margin-bottom:0.2rem; }
