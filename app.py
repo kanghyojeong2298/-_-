@@ -25,7 +25,7 @@ from pathlib import Path
 from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent))
 from modules.pdf_parser   import parse_pdf, detect_pdf_type
-from modules.excel_writer import generate_excel
+from modules.excel_writer import generate_excel, period_labels
 CURRENCIES = ["MYR", "PHP", "SGD", "THB", "TWD", "VND", "JPY", "BRL", "MXN"]
 CURRENCY_NAMES = {
     "MYR": "말레이시아 링깃 (MYR)", "PHP": "필리핀 페소 (PHP)",
@@ -646,7 +646,14 @@ if process_btn and uploaded_files:
                 rate_log = [f"✏️ {cur}: **{manual_rates.get(cur,0.0):.2f}**" for cur in CURRENCIES]
             progress_bar.progress(75, text="📊 엑셀 생성 중...")
             # ── 엑셀 생성 ──
-            output_path = tmpdir / f"매출집계_{year}{month:02d}.xlsx"
+            _disp_lbl, _fname_lbl = period_labels(shopee_results, lazada_result, qoo10_result,
+                                                  fallback=f'{year}년 {month:02d}월')
+            _fsafe = _fname_lbl
+            for _ch in '\\/:*?"<>|':
+                _fsafe = _fsafe.replace(_ch, ',')
+            if not _fsafe:
+                _fsafe = f'{year}{month:02d}'
+            output_path = tmpdir / f"매출집계_{_fsafe}.xlsx"
             generate_excel(
                 shopee_results=shopee_results,
                 lazada_result=lazada_result,
@@ -659,14 +666,14 @@ if process_btn and uploaded_files:
             progress_bar.progress(100, text="✅ 완료!")
             excel_bytes = output_path.read_bytes()
         # ── 결과 ──
-        st.success(f"✅ 엑셀 생성 완료! — {year}년 {month:02d}월")
+        st.success(f"✅ 엑셀 생성 완료! — {_disp_lbl}")
         with st.expander("💱 적용된 환율 (소포수령증 발행일 기준)"):
             for log in rate_log:
                 st.markdown(log)
         st.download_button(
-            label=f"⬇️  매출집계_{year}{month:02d}.xlsx  다운로드",
+            label=f"⬇️  매출집계_{_fsafe}.xlsx  다운로드",
             data=excel_bytes,
-            file_name=f"매출집계_{year}{month:02d}.xlsx",
+            file_name=f"매출집계_{_fsafe}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
             type="primary",
