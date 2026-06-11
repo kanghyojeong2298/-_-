@@ -606,29 +606,30 @@ if process_btn and uploaded_files:
             elif rate_mode == "📊 SMBS 엑셀 업로드" and smbs_excel_files:
                 rate_source = parse_smbs_excel_files(smbs_excel_files)
             if rate_source is not None:
-                from modules.exchange_rate import get_rate_for_date
+                from modules.exchange_rate import get_rate_for_date, avg_rate_for_period
                 rate_log = []
                 missing  = []
                 for cur in CURRENCIES:
                     if cur in rate_source and rate_source[cur].get('daily'):
                         rates[cur] = rate_source[cur]
-                        # 발행일(write_date) 기준으로 그날 환율 자동 선택 (없으면 직전 영업일)
+                        _notes = []
+                        # 큐텐(JPY): 거래기간 평균환율
                         if cur == 'JPY' and qoo10_result:
-                            wd = (qoo10_result.get('write_date', '')
-                                  or qoo10_result.get('period_end', fetch_end))
-                        elif cur in ('MYR','PHP','SGD','THB','TWD','VND'):
-                            sd = next((s for s in shopee_results if s.get('currency') == cur), None)
-                            if sd:
-                                wd = sd.get('write_date', '') or sd.get('period_end', fetch_end)
-                            elif lazada_result:
-                                wd = (lazada_result.get('write_date', '')
-                                      or lazada_result.get('period_end', fetch_end))
-                            else:
-                                wd = fetch_end
-                        else:
-                            wd = fetch_end
-                        r = get_rate_for_date(rate_source[cur], wd)
-                        rate_log.append(f"✅ {cur}: **{r:.2f}** (발행일 {wd} 기준)")
+                            _qs = qoo10_result.get('period_start', '')
+                            _qe = qoo10_result.get('period_end', '')
+                            _r = avg_rate_for_period(rate_source[cur], _qs, _qe)
+                            _notes.append(f"큐텐 거래기간 평균 **{_r:.2f}**")
+                        # 쇼피: 건별 발행일자 환율
+                        if any(s.get('currency') == cur for s in shopee_results):
+                            _notes.append("쇼피 발행일별 환율")
+                        # 라자다: 거래기간 평균환율
+                        if lazada_result and any(it.get('currency') == cur for it in lazada_result.get('items', [])):
+                            _lps = lazada_result.get('period_start', '')
+                            _lpe = lazada_result.get('period_end', '')
+                            _lr = avg_rate_for_period(rate_source[cur], _lps, _lpe)
+                            _notes.append(f"라자다 거래기간 평균 **{_lr:.2f}**")
+                        if _notes:
+                            rate_log.append(f"✅ {cur}: " + " / ".join(_notes))
                     else:
                         rates[cur] = _build_rate_dict(cur, 0.0, fetch_start, fetch_end)
                         rate_log.append(f"⚠️ {cur}: 환율 데이터 없음 → 0")
@@ -667,7 +668,7 @@ if process_btn and uploaded_files:
             excel_bytes = output_path.read_bytes()
         # ── 결과 ──
         st.success(f"✅ 엑셀 생성 완료! — {_disp_lbl}")
-        with st.expander("💱 적용된 환율 (소포수령증 발행일 기준)"):
+        with st.expander("💱 적용된 환율 (쇼피=발행일별 · 라자다/큐텐=거래기간 평균)"):
             for log in rate_log:
                 st.markdown(log)
         st.download_button(
