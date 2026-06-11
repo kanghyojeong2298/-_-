@@ -234,6 +234,40 @@ def get_rate_for_date(rate_data: dict, date_str: str) -> float:
     return rates[pos - 1]
 
 
+def avg_rate_for_period(rate_data: dict, start_str: str, end_str: str) -> float:
+    """거래기간(start~end) 동안의 일별 환율 평균. 기간 내 데이터 없으면 기간말/평균으로 폴백."""
+    if not rate_data:
+        return 0.0
+    daily = rate_data.get('daily', [])
+    if not daily:
+        return rate_data.get('average', 0.0)
+
+    def _norm(x):
+        if not x:
+            return ''
+        n = str(x).replace('-', '.').replace('/', '.')
+        d = n.replace('.', '')
+        if re.match(r'^\d{8}$', d):
+            return f"{d[:4]}.{d[4:6]}.{d[6:8]}"
+        return n
+
+    s = _norm(start_str)
+    e = _norm(end_str)
+    vals = []
+    for d in daily:
+        dt = d['date']
+        if s and dt < s:
+            continue
+        if e and dt > e:
+            continue
+        if d['rate'] > 0:
+            vals.append(d['rate'])
+    if vals:
+        return round(sum(vals) / len(vals), 2)
+    r = get_rate_for_date(rate_data, end_str)
+    return r if r else rate_data.get('average', 0.0)
+
+
 def get_period_end_rate(rate_data: dict, period_end: str) -> float:
     """
     거래기간 마지막날 환율 반환.
