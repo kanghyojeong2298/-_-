@@ -543,6 +543,8 @@ if process_btn and uploaded_files:
                     qoo10_entries.append({
                         "tracking_no": _trk, "qty": _qty,
                         "amount": _amt, "write_date": _wdt,
+                        "period_start": str(_row.get("거래기간 시작", "") or "").strip(),
+                        "period_end": str(_row.get("거래기간 종료", "") or "").strip(),
                     })
             if qoo10_entries:
                 _total_amt = sum(e["amount"] for e in qoo10_entries)
