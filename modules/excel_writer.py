@@ -50,6 +50,62 @@ NUM_FMT  = '#,##0'        # 정수(수량·원화)
 NUM_FMT2 = '#,##0.00'     # 소수(외화·환율)
 
 
+def _months_between(start, end):
+    """거래기간(start~end)이 포함하는 (연,월) 리스트."""
+    def _p(x):
+        d = re.sub(r'\D', '', str(x))[:8]
+        return (int(d[:4]), int(d[4:6])) if len(d) >= 6 else None
+    a = _p(start); b = _p(end)
+    a = a or b; b = b or a
+    if not a:
+        return []
+    if b < a:
+        a, b = b, a
+    out = []
+    y, m = a
+    while (y, m) <= b:
+        out.append((y, m))
+        m += 1
+        if m > 12:
+            m = 1; y += 1
+    return out
+
+
+def period_labels(shopee_results, lazada_result, qoo10_result, fallback=''):
+    """데이터 거래기간으로 (표시용, 파일명용) 라벨 생성.
+    예: 10월 / 10~12월 / 1~12월 / 3,5,9월(파일명) · 3/5/9월(표시)."""
+    pairs = []
+    for sd in (shopee_results or []):
+        pairs.append((sd.get('period_start', ''), sd.get('period_end', '')))
+    if lazada_result:
+        pairs.append((lazada_result.get('period_start', ''), lazada_result.get('period_end', '')))
+    if qoo10_result:
+        pairs.append((qoo10_result.get('period_start', ''), qoo10_result.get('period_end', '')))
+    yms = set()
+    for s_, e_ in pairs:
+        yms.update(_months_between(s_, e_))
+    if not yms:
+        return fallback, fallback
+    years = sorted(set(y for y, m in yms))
+
+    def _fmt(y, list_sep):
+        ms = sorted(m for yy, m in yms if yy == y)
+        if len(ms) == 1:
+            return f'{ms[0]}월'
+        if ms == list(range(ms[0], ms[-1] + 1)):
+            return f'{ms[0]}~{ms[-1]}월'
+        return list_sep.join(str(m) for m in ms) + '월'
+
+    if len(years) == 1:
+        y = years[0]
+        disp = f'{y}년 {_fmt(y, "/")}'
+        fname = _fmt(y, ',')
+    else:
+        disp = ', '.join(f'{y}년 {_fmt(y, "/")}' for y in years)
+        fname = '_'.join(f'{y}년{_fmt(y, ",")}' for y in years)
+    return disp, fname
+
+
 def _style(cell, font=None, fill=None, align=None, border=None, num_format=None):
     if font:      cell.font       = font
     if fill:      cell.fill       = fill
@@ -653,9 +709,11 @@ def write_summary_sheet(ws, shopee_totals: dict, lazada_totals: dict,
     if qoo10_data:
         jpy_amount = qoo10_data.get('amount', 0)
         krw = qoo10_data.get('total_krw') or round(jpy_amount * jpy_rate / 100)
+        # 평균환율 = 실효환율(원화÷외화×100) — 외화·원화와 정확히 일치
+        eff_rate = round(krw * 100 / jpy_amount, 2) if jpy_amount else jpy_rate
         qd = qt + 2
         ws.cell(row=qd, column=2, value=jpy_amount)
-        ws.cell(row=qd, column=3, value=jpy_rate)
+        ws.cell(row=qd, column=3, value=eff_rate)
         ws.cell(row=qd, column=4, value=krw)
         _style(ws.cell(row=qd, column=2), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM)
         _style(ws.cell(row=qd, column=3), font=FONT_DEFAULT, align=RIGHT, border=THIN_BORDER, num_format=NUM2)
@@ -793,37 +851,8 @@ def generate_excel(
             lazada_totals[cur]['fx']  += it.get('amount', 0.0)
             lazada_totals[cur]['krw'] += krw
 
-    # ── 총집계 연·월 라벨: 거래기간 전체 범위에 맞춰 자동 표시 ──
-    _all_dates = []
-    for _sd in shopee_results:
-        for _k in ('period_start', 'period_end'):
-            if _sd.get(_k):
-                _all_dates.append(_sd[_k])
-    if lazada_result:
-        for _k in ('period_start', 'period_end'):
-            if lazada_result.get(_k):
-                _all_dates.append(lazada_result[_k])
-    if qoo10_result:
-        for _k in ('period_start', 'period_end'):
-            if qoo10_result.get(_k):
-                _all_dates.append(qoo10_result[_k])
-
-    def _ym(dstr):
-        d = re.sub(r'\D', '', str(dstr))[:6]
-        return (int(d[:4]), int(d[4:6])) if len(d) == 6 else None
-
-    _yms = [v for v in (_ym(x) for x in _all_dates) if v]
-    if _yms:
-        _y0, _m0 = min(_yms)
-        _y1, _m1 = max(_yms)
-        if (_y0, _m0) == (_y1, _m1):
-            period_label = f'{_y0}년 {_m0}월'
-        elif _y0 == _y1:
-            period_label = f'{_y0}년 {_m0}~{_m1}월'
-        else:
-            period_label = f'{_y0}년 {_m0}월 ~ {_y1}년 {_m1}월'
-    else:
-        period_label = f'{year}년 {month:02d}월'
+    period_label, _ = period_labels(shopee_results, lazada_result, qoo10_result,
+                                    fallback=f'{year}년 {month:02d}월')
 
     write_summary_sheet(ws_summary, shopee_totals, lazada_totals,
                         qoo10_result, jpy_rate,
