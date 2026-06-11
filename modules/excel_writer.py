@@ -320,7 +320,8 @@ def write_currency_template_sheet(ws, currency: str,
                                    shopee_data: Optional[dict],
                                    lazada_items: list,
                                    rates: dict,
-                                   lazada_write_date: str = ''):
+                                   lazada_write_date: str = '',
+                                   lazada_rate_override: float = None):
     """
     MYR, PHP, SGD 등 수출신고 프로그램용 시트 작성
     환율: 각 소포수령증 발행일(write_date) 기준
@@ -334,7 +335,8 @@ def write_currency_template_sheet(ws, currency: str,
     ws.column_dimensions['G'].width = 14
 
     # 라자다 환율: 큐텐과 동일하게 평균환율 사용
-    lazada_rate = rates.get(currency, {}).get('average', 0.0)
+    lazada_rate = (lazada_rate_override if lazada_rate_override is not None
+                   else rates.get(currency, {}).get('average', 0.0))
     divisor     = RATE_DIVISOR.get(currency, 1)   # VND·JPY → 100, 나머지 → 1
 
     # ── 쇼피 소계: 각 거래의 발행일 기준 환율 합산 ──
@@ -684,12 +686,22 @@ def generate_excel(
     else:
         lazada_write_date = ''
 
-    # ── 큐텐 JPY 환율: 거래 전체가 한 달에 걸쳐 있으므로 평균환율 사용 ──
-    # (개별 거래 날짜가 없어 발행일/기간말 기준이 아닌 월 평균이 정확함)
+    from .exchange_rate import avg_rate_for_period
+
+    # ── 라자다 거래기간 평균환율 (통화별) ──
+    lazada_avg_rates = {}
+    if lazada_result:
+        _lp_s = lazada_result.get('period_start', '')
+        _lp_e = lazada_result.get('period_end', '')
+        for _it in lazada_result.get('items', []):
+            _lc = _it.get('currency', '')
+            if _lc and _lc not in lazada_avg_rates:
+                lazada_avg_rates[_lc] = avg_rate_for_period(rates.get(_lc), _lp_s, _lp_e)
+
+    # ── 큐텐 JPY 환율: 거래기간 평균환율 사용 ──
     jpy_rate_data = rates.get('JPY')
     if jpy_rate_data:
         jpy_rate = jpy_rate_data.get('average', 0.0)
-        # average가 0이면 일별 평균 직접 계산
         if jpy_rate == 0.0:
             daily = jpy_rate_data.get('daily', [])
             if daily:
@@ -701,6 +713,13 @@ def generate_excel(
     if qoo10_result:
         qoo10_write_date = (qoo10_result.get('write_date', '')
                             or qoo10_result.get('period_end', ''))
+        # 큐텐 전체 거래기간 평균환율을 대표 환율로 사용 (표시·폴백용)
+        _qs = qoo10_result.get('period_start', '')
+        _qe = qoo10_result.get('period_end', '')
+        if (_qs or _qe) and jpy_rate_data:
+            _qavg = avg_rate_for_period(jpy_rate_data, _qs, _qe)
+            if _qavg:
+                jpy_rate = _qavg
 
         # ── 큐텐 건별 환율·원화 계산 (entries) ──
         q_entries = qoo10_result.get('entries')
@@ -713,8 +732,9 @@ def generate_excel(
             }]
         q_total_krw = 0
         for e in q_entries:
-            wd = e.get('write_date', '') or qoo10_result.get('period_end', '')
-            r  = _get_rate(rates, 'JPY', wd) or jpy_rate
+            ps = e.get('period_start', '') or qoo10_result.get('period_start', '')
+            pe = e.get('period_end', '') or qoo10_result.get('period_end', '')
+            r = avg_rate_for_period(jpy_rate_data, ps, pe) or jpy_rate
             e['rate'] = r
             e['krw']  = round(e.get('amount', 0) * r / 100)
             q_total_krw += e['krw']
@@ -764,7 +784,7 @@ def generate_excel(
         for it in lazada_result.get('items', []):
             cur = it.get('currency', '')
             if cur not in laz_rate_by_cur:
-                laz_rate_by_cur[cur] = rates.get(cur, {}).get('average', 0.0)
+                laz_rate_by_cur[cur] = lazada_avg_rates.get(cur, rates.get(cur, {}).get('average', 0.0))
             rate = laz_rate_by_cur[cur]
             div  = RATE_DIVISOR.get(cur, 1)
             krw  = round(it.get('amount', 0.0) * rate / div)
@@ -773,9 +793,41 @@ def generate_excel(
             lazada_totals[cur]['fx']  += it.get('amount', 0.0)
             lazada_totals[cur]['krw'] += krw
 
+    # ── 총집계 연·월 라벨: 거래기간 전체 범위에 맞춰 자동 표시 ──
+    _all_dates = []
+    for _sd in shopee_results:
+        for _k in ('period_start', 'period_end'):
+            if _sd.get(_k):
+                _all_dates.append(_sd[_k])
+    if lazada_result:
+        for _k in ('period_start', 'period_end'):
+            if lazada_result.get(_k):
+                _all_dates.append(lazada_result[_k])
+    if qoo10_result:
+        for _k in ('period_start', 'period_end'):
+            if qoo10_result.get(_k):
+                _all_dates.append(qoo10_result[_k])
+
+    def _ym(dstr):
+        d = re.sub(r'\D', '', str(dstr))[:6]
+        return (int(d[:4]), int(d[4:6])) if len(d) == 6 else None
+
+    _yms = [v for v in (_ym(x) for x in _all_dates) if v]
+    if _yms:
+        _y0, _m0 = min(_yms)
+        _y1, _m1 = max(_yms)
+        if (_y0, _m0) == (_y1, _m1):
+            period_label = f'{_y0}년 {_m0}월'
+        elif _y0 == _y1:
+            period_label = f'{_y0}년 {_m0}~{_m1}월'
+        else:
+            period_label = f'{_y0}년 {_m0}월 ~ {_y1}년 {_m1}월'
+    else:
+        period_label = f'{year}년 {month:02d}월'
+
     write_summary_sheet(ws_summary, shopee_totals, lazada_totals,
                         qoo10_result, jpy_rate,
-                        f'{year}년 {month:02d}월', submitter=report_submitter)
+                        period_label, submitter=report_submitter)
 
     # ── 통화별 수출신고 템플릿 (MYR, PHP, SGD, THB, TWD, VND) ──
     for cur in currency_list:
@@ -786,7 +838,8 @@ def generate_excel(
             lazada_items = [it for it in lazada_result.get('items', [])
                             if it.get('currency') == cur]
         write_currency_template_sheet(ws, cur, sd, lazada_items, rates,
-                                      lazada_write_date=lazada_write_date)
+                                      lazada_write_date=lazada_write_date,
+                                      lazada_rate_override=lazada_avg_rates.get(cur))
 
     # ── JPY 수출신고 시트 (큐텐만) ──
     ws_jpy = wb.create_sheet('JPY')
